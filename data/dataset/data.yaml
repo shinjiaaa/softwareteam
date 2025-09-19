@@ -1,6 +1,7 @@
-train: ../train/images
-val: ../valid/images
-test: ../test/images
+path: C:\Users\lab\softwareteam\data\dataset
+train: train/images
+val: valid/images
+test: test/images
 
 nc: 5
 names: ['Building', 'Person', 'Pole', 'Tree', 'Vehicle']
