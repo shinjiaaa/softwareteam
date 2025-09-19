@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 5
+names: ['Building', 'Person', 'Pole', 'Tree', 'Vehicle']
+
+roboflow:
+  workspace: tylervisimoai
+  project: drone-crash-avoidance
+  version: 7
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/tylervisimoai/drone-crash-avoidance/dataset/7
