@@ -1,4 +1,4 @@
-# softwareteam - LIME 기반 장애물 충돌 감지 드론 시스템 개발
+# softwareteam - 장애물 충돌 감지 모니터링 및 알림 시스템
 
 ## 개발 수칙
 1. directory를 구조화하여 개발을 진행할 것 (객체지향적 개발 지향)
