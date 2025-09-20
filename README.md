@@ -9,15 +9,16 @@
 4. commit message 상세하게 작성할 것 (본인 이름 및 수정한 부분 ex. shinjia - model 데이터 셋 추가)
 5. 주석을 상세히 작성할 것 - 유지보수를 원활하게 진행하기 위함
 6. 함수명, 변수명 snake_case 형식으로 통일할 것
+7. main에 변경 사항이 있을 경우, 터미널에 git pull origin main 입력 후 개발 진행 (가장 최신 코드에서 작업하기 위함)
 
 ## Directory
-1. drone: TELLO SDK 이착륙 제어
+1. drone: TELLO SDK 이착륙 제어 & 실시간 카메라 영상 사용
 2. data: 원본 데이터(드론 충돌 영상 & 이미지), YOLOv8 학습용 파일(.yaml)
     1. dataset
         1. https://universe.roboflow.com/tylervisimoai/drone-crash-avoidance
         2. https://github.com/VisDrone/VisDrone-Dataset
     2. model 위치: data/runs/detect/train5/weights/best.pt
-3. alert: 알림 & TTS 제어
+3. alert: 알림 & TTS
 4. models: Model Train, Test, LIME 적용
     1. data_train.py: model train file
     2. data_test.py: model이 image를 보고 충돌 가능성이 있는 객체인지 확인하는 파일
