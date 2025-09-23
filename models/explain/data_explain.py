@@ -1,330 +1,310 @@
-from ultralytics import YOLO
+# models/explain/data_explain.py
+# Webcam + YOLO(실시간) + LIME(비동기 ROI 저해상도, 즉시 반영)
+# - 스냅샷/저장 없음: 생성 즉시 화면 합성
+# - 최고 conf 박스(top-k)만 축소 ROI에서 LIME → 마스크 합성
+# - 최신 프레임 도착 시 이전 LIME 작업 폐기(최신성 우선)
+
+import os
+import time
+import argparse
+import subprocess
+from typing import Tuple, List, Optional
+from threading import Thread, Lock, Event
+
 import cv2
 import numpy as np
+from ultralytics import YOLO
+
+# LIME (pip install lime scikit-image)
 from lime import lime_image
-from skimage.segmentation import mark_boundaries
-import matplotlib.pyplot as plt
-from plyer import notification
-import winsound
-import threading
-import time
+from skimage.segmentation import slic
 
-def play_alarm_sound():
-    """Play emergency alarm sound"""
-    while True:
-        winsound.Beep(1000, 500)  # 1000Hz for 500ms
-        time.sleep(0.5)  # Pause between beeps
-        winsound.Beep(800, 500)   # 800Hz for 500ms
-        time.sleep(0.5)  # Pause between beeps
+# ---------- 알림(선택) ----------
+try:
+    from plyer import notification
 
-# 다양한 경로에서 모델 찾기
-model_paths = [
-    # 상대 경로들 (models/explain 기준)
-    "../../data/runs/detect/visdrone_safe/weights/best.pt",
-    "../../data/runs/detect/continue_training/weights/best.pt", 
-    "../../data/runs/detect/train5/weights/best.pt",
-    # 절대 경로들 (프로젝트 루트 기준)
-    "data/runs/detect/visdrone_safe/weights/best.pt",
-    "data/runs/detect/continue_training/weights/best.pt",
-    "data/runs/detect/train5/weights/best.pt",
-    # Windows 절대 경로
-    "C:/Users/lab/softwareteam/data/runs/detect/visdrone_safe/weights/best.pt",
-    "C:/Users/lab/softwareteam/data/runs/detect/continue_training/weights/best.pt",
-    "C:/Users/lab/softwareteam/data/runs/detect/train5/weights/best.pt"
-]
+    def notify(title: str, message: str):
+        try:
+            notification.notify(title=title, message=message, timeout=2)
+        except Exception:
+            pass
+except Exception:
+    def notify(title: str, message: str):
+        pass
 
-model = None
-for i, path in enumerate(model_paths):
+
+def beep():
+    """macOS 시스템 사운드(실패 시 무시)."""
     try:
-        model = YOLO(path)
-        if i <= 2:
-            print(f"모델 로드 완료: {['VisDrone 영상 학습', '향상', '기본'][i]} 모델")
-        else:
-            print(f"모델 로드 완료: {path}")
-        break
-    except Exception as e:
-        continue
+        subprocess.Popen(["afplay", "/System/Library/Sounds/Glass.aiff"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
 
-if model is None:
-    print("❌ 모든 경로에서 모델을 찾을 수 없습니다!")
-    exit(1)
+# ---------- 유틸 ----------
 
 
-# LIME을 적용할 함수 정의
-def predict_for_lime(images):
-    results = []
-    for img in images:
-        r = model.predict(img, verbose=False)
-        if len(r[0].boxes) > 0:
-            # 가장 높은 신뢰도를 가진 객체 선택
-            conf = r[0].boxes.conf.max().item()
-        else:
-            conf = 0.0
-        # 충돌 가능성 / 비충돌 가능성
-        results.append([conf, 1 - conf])
-    return np.array(results)
-
-# 객체가 탐지된 영역만 마스킹하는 함수 추가
-def get_object_mask(img, model):
-    results = model.predict(img, verbose=False)
-    mask = np.zeros((img.shape[0], img.shape[1]), dtype=bool)
-    
-    if len(results[0].boxes) > 0:
-        for box in results[0].boxes:
-            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
-            # 바운딩 박스 영역을 마스크에 추가
-            mask[y1:y2, x1:x2] = True
-    
-    return mask
-
-# 객체 영역에만 초점을 맞춘 LIME 예측 함수
-def predict_for_lime_focused(images, object_mask):
-    results = []
-    for img in images:
-        # 객체 영역 외부를 검은색으로 마스킹
-        masked_img = img.copy()
-        masked_img[~object_mask] = [0, 0, 0]  # 배경을 검은색으로
-        
-        r = model.predict(masked_img, verbose=False)
-        if len(r[0].boxes) > 0:
-            # 가장 높은 신뢰도를 가진 객체 선택
-            conf = r[0].boxes.conf.max().item()
-        else:
-            conf = 0.0
-        results.append([conf, 1 - conf])
-    return np.array(results)
+def open_cam(idx=0, width=1280, height=720):
+    """AVFoundation 백엔드로 카메라 열기 + 저지연 설정."""
+    cap = cv2.VideoCapture(idx, cv2.CAP_AVFOUNDATION)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE,   1)
+    return cap
 
 
-# 테스트 이미지 경로들 시도
-image_paths = [
-    "../../data/dataset/valid/images/Drone-Crash-Compilation-VOL-4_184_0-210_0_mp4-3_jpg.rf.dd8264825613b9a5986fcf2f69691044.jpg",
-    "data/dataset/valid/images/Drone-Crash-Compilation-VOL-4_184_0-210_0_mp4-3_jpg.rf.dd8264825613b9a5986fcf2f69691044.jpg",
-    "C:/Users/lab/softwareteam/data/dataset/valid/images/Drone-Crash-Compilation-VOL-4_184_0-210_0_mp4-3_jpg.rf.dd8264825613b9a5986fcf2f69691044.jpg"
-]
+def put_fps(frame, fps):
+    """좌상단 FPS 표시."""
+    cv2.putText(frame, f"FPS: {fps:.1f}", (10, 24),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
 
-img = None
-for path in image_paths:
+
+def draw_boxes(frame, results, conf_thres=0.35, names=None):
+    """YOLO 박스를 그리며 (x1,y1,x2,y2,cls,conf) 리스트 반환."""
+    if not results:
+        return frame, []
+    r0 = results[0]
+    if getattr(r0, "boxes", None) is None:
+        return frame, []
+    boxes = []
+    for b in r0.boxes:
+        if b.conf is None or b.xyxy is None:
+            continue
+        conf = float(b.conf[0])
+        if conf < conf_thres:
+            continue
+        x1, y1, x2, y2 = b.xyxy[0].cpu().numpy().astype(int).tolist()
+        cls = int(b.cls[0]) if b.cls is not None else -1
+        label = names[cls] if names and 0 <= cls < len(names) else str(cls)
+        label = f"{label} {conf:.2f}"
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(frame, label, (x1, max(20, y1-6)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+        boxes.append((x1, y1, x2, y2, cls, conf))
+    return frame, boxes
+
+
+def blend_mask_color(frame_bgr: np.ndarray, mask01: np.ndarray, alpha: float = 0.6) -> np.ndarray:
+    """0~1 마스크를 붉은색으로 부드럽게 합성."""
+    h, w = frame_bgr.shape[:2]
+    if mask01 is None or mask01.shape != (h, w):
+        return frame_bgr
+    m = cv2.GaussianBlur(mask01, (0, 0), 1.0)
+    m3 = cv2.merge([m, m, m])
+    red = np.zeros_like(frame_bgr)
+    red[:, :, 2] = 255
+    out = (frame_bgr.astype(np.float32) * (1.0 - alpha*m3)
+           + red.astype(np.float32) * (alpha*m3)).astype(np.uint8)
+    return out
+
+# ---------- LIME 핵심 ----------
+
+
+def make_predict_fn_for_roi(model: YOLO, class_id: int):
+    """ROI에서 타깃 클래스 최대 conf를 [neg, pos]로 반환하는 의사 분류기."""
+    def predict_proba(batch_rgb: np.ndarray) -> np.ndarray:
+        probs = []
+        for rgb in batch_rgb:
+            bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            # 작은 입력으로 지연 감소
+            res = model.predict(source=bgr, verbose=False, imgsz=320)[0]
+            score = 0.0
+            if getattr(res, "boxes", None) is not None:
+                for bx in res.boxes:
+                    if bx.conf is None or bx.cls is None:
+                        continue
+                    if int(bx.cls[0]) == class_id:
+                        score = max(score, float(bx.conf[0]))
+            pos = float(np.clip(score, 0.0, 1.0))
+            probs.append([1.0 - pos, pos])
+        return np.array(probs, dtype=np.float32)
+    return predict_proba
+
+
+def lime_mask_on_roi(roi_bgr: np.ndarray,
+                     model: YOLO,
+                     class_id: int,
+                     n_segments: int = 70,
+                     num_samples: int = 90,
+                     num_features: int = 6,
+                     compactness: float = 10.0) -> np.ndarray:
+    """ROI(BGR)에서 LIME 긍정 마스크(0~1) 생성. 실시간성을 위해 샘플/세그먼트 축소."""
+    roi_rgb = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2RGB)
+    def segmenter(img): return slic(img, n_segments=n_segments, compactness=compactness,
+                                    sigma=1, start_label=0)
+    explainer = lime_image.LimeImageExplainer()
+    predict_fn = make_predict_fn_for_roi(model, class_id)
+
+    explanation = explainer.explain_instance(
+        roi_rgb,
+        classifier_fn=predict_fn,
+        top_labels=1,
+        hide_color=0,
+        num_samples=num_samples,
+        segmentation_fn=segmenter
+    )
+    label = explanation.top_labels[0]
+    _, mask = explanation.get_image_and_mask(
+        label, positive_only=True, num_features=num_features, hide_rest=False
+    )
+    return (mask > 0).astype(np.float32)
+
+# ---------- 메인(스트리밍 LIME) ----------
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--cam", type=int, default=0)
+    ap.add_argument("--imgsz", type=int, default=512, help="YOLO 입력 크기(작게)")
+    ap.add_argument("--conf", type=float, default=0.35, help="탐지 conf 임계값")
+    ap.add_argument("--min_conf_for_lime", type=float,
+                    default=0.50, help="LIME 최소 conf")
+    ap.add_argument("--lime_alpha", type=float, default=0.6, help="오버레이 강도")
+    ap.add_argument("--roi_shrink", type=int,
+                    default=192, help="ROI 축소 크기(지연 핵심)")
+    ap.add_argument("--show_fps", action="store_true")
+    ap.add_argument("--topk", type=int, default=1,
+                    help="LIME 적용 상위 박스 수(1~3 권장)")
+    args = ap.parse_args()
+
+    # 가중치 경로 후보 탐색
+    candidates = [
+        "data/runs/detect/train5/weights/best.pt",
+        "data/runs/detect/train/weights/best.pt",
+        "data/runs/train/weights/best.pt",
+        "data/best.pt",
+        "best.pt",
+    ]
+    weights = next((c for c in candidates if os.path.exists(c)), None)
+    if not weights:
+        raise FileNotFoundError(
+            "best.pt 가중치를 찾지 못했습니다. data/runs/.../weights/best.pt 경로 확인")
+
+    yolo = YOLO(weights)
     try:
-        img = cv2.imread(path)
-        if img is not None:
-            print(f"이미지 로드 완료: {path}")
-            break
-    except:
-        continue
+        names = yolo.model.names if hasattr(yolo, "model") else None
+    except Exception:
+        names = None
 
-if img is None:
-    print("❌ 테스트 이미지를 찾을 수 없습니다!")
-    exit(1)
+    cap = open_cam(args.cam)
+    if not cap.isOpened():
+        raise RuntimeError(f"웹캠을 열 수 없습니다. index={args.cam}")
 
-img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    print("[INFO] Webcam started. Press 'q' or ESC to quit. (Streaming LIME)")
+    cv2.namedWindow("Webcam - LIME Streaming", cv2.WINDOW_NORMAL)
 
-# 충돌 확률 임계값 설정
-conf_threshold = 0.5
+    # 최신 마스크 저장소(즉시 합성용)
+    last_mask_full: Optional[np.ndarray] = None
+    mask_lock = Lock()
 
-# 이미지별 충돌 확률 계산
-conf = predict_for_lime([img])[0][0]
+    # 비동기 LIME 워커(항상 최신 작업만 처리)
+    worker_thread: Optional[Thread] = None
+    cancel_event = Event()
+    latest_job = {"frame": None, "boxes": None}  # 최신 작업만 유지
 
-# 객체 탐지 영역 마스크 생성
-object_mask = get_object_mask(img, model)
+    def worker_loop():
+        nonlocal last_mask_full
+        while not cancel_event.is_set():
+            job_frame = None
+            job_boxes = None
+            # 최신 작업 스냅샷(가져오면 즉시 비움)
+            if latest_job["frame"] is not None and latest_job["boxes"]:
+                job_frame = latest_job["frame"]
+                job_boxes = latest_job["boxes"]
+                latest_job["frame"] = None
+                latest_job["boxes"] = None
+            else:
+                time.sleep(0.005)
+                continue
 
-# Check collision risk and set alarm
-if conf >= conf_threshold:
-    color_map = "Reds"
-    
-    # Start alarm sound in a separate thread
-    alarm_thread = threading.Thread(target=play_alarm_sound)
-    alarm_thread.daemon = True  # Thread will stop when main program stops
-    alarm_thread.start()
-    
-    # 알림 시각화 (Windows)
-    notification.notify(
-        title='Drone Collision Warning!',
-        message=f'Collision Risk Detected!\nProbability: {conf*100:.1f}%\nTake immediate action!',
-        app_icon=None,
-        timeout=10,
-    )
-else:
-    color_map = "Blues"
+            H, W = job_frame.shape[:2]
+            # top-k만 처리(최신성)
+            sel = sorted(job_boxes, key=lambda b: b[5], reverse=True)[
+                :max(1, args.topk)]
 
-# LIME explainer - 객체 영역에 집중
-explainer = lime_image.LimeImageExplainer()
+            # 박스별 LIME 마스크 → 화면 크기 마스크로 합성
+            mask_full = np.zeros((H, W), np.float32)
+            for (x1, y1, x2, y2, cls, conf) in sel:
+                if cancel_event.is_set():
+                    return
+                if conf < args.min_conf_for_lime:
+                    continue
+                # ROI 추출 + 축소
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(W-1, x2), min(H-1, y2)
+                if x2 <= x1 or y2 <= y1:
+                    continue
+                roi = job_frame[y1:y2, x1:x2].copy()
+                roi_small = cv2.resize(
+                    roi, (args.roi_shrink, args.roi_shrink), interpolation=cv2.INTER_AREA)
 
-# 개선된 세그멘테이션 파라미터 사용
-explanation = explainer.explain_instance(
-    img, 
-    classifier_fn=lambda images: predict_for_lime_focused(images, object_mask),
-    top_labels=1, 
-    hide_color=0, 
-    num_samples=1000,
-    segmentation_fn=lambda x: lime_image.SegmentationAlgorithm('quickshift', 
-                                                              kernel_size=4,
-                                                              max_dist=200, 
-                                                              ratio=0.2)(x)
-)
+                # LIME → ROI 마스크(0~1)
+                m_small = lime_mask_on_roi(roi_small, yolo, cls,
+                                           n_segments=70, num_samples=90, num_features=6, compactness=10.0)
+                m_roi = cv2.resize(
+                    m_small, (roi.shape[1], roi.shape[0]), interpolation=cv2.INTER_LINEAR)
+                full = np.zeros((H, W), np.float32)
+                full[y1:y2, x1:x2] = m_roi
+                mask_full = np.maximum(mask_full, full)
 
-# 충돌 기여도 가져오기
-label = explanation.top_labels[0]
+            # 최신 마스크로 즉시 교체(EMA 등 없음)
+            with mask_lock:
+                last_mask_full = mask_full
 
-# 신뢰도 기반 필터링 - 낮은 기여도 영역 제거
-min_contribution_threshold = 0.05  # 5% 미만 기여도는 제거
-filtered_exp = [(feature, weight) for feature, weight in explanation.local_exp[label] 
-                if abs(weight) >= min_contribution_threshold]
+    # 워커 시작
+    cancel_event.clear()
+    worker_thread = Thread(target=worker_loop, daemon=True)
+    worker_thread.start()
 
-print(f"원본 영역 수: {len(explanation.local_exp[label])}")
-print(f"필터링 후 영역 수: {len(filtered_exp)}")
+    t0, cnt, fps = time.time(), 0, 0.0
+    try:
+        while True:
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                continue
 
-# 전체 슈퍼픽셀 개수로 시각화 (필터링된 것만)
-if filtered_exp:
-    # 필터링된 기여도만으로 마스크 생성
-    temp, mask = explanation.get_image_and_mask(
-        label=label,
-        positive_only=False,
-        num_features=len(filtered_exp),
-        hide_rest=False,
-    )
-else:
-    # 필터링된 영역이 없으면 기본값 사용
-    temp, mask = explanation.get_image_and_mask(
-        label=label,
-        positive_only=False,
-        num_features=5,
-        hide_rest=False,
-    )
+            # 1) YOLO 탐지(저해상도 입력)
+            results = yolo.predict(
+                source=frame, imgsz=args.imgsz, verbose=False)
+            frame, boxes = draw_boxes(
+                frame, results, conf_thres=args.conf, names=names)
 
-# 각 슈퍼픽셀별 기여도 합산 (필터링된 것만)
-if filtered_exp:
-    positive_sum = sum(weight for _, weight in filtered_exp if weight > 0)
-    negative_sum = sum(weight for _, weight in filtered_exp if weight < 0)
-else:
-    positive_sum = sum(weight for _, weight in explanation.local_exp[label] if weight > 0)
-    negative_sum = sum(weight for _, weight in explanation.local_exp[label] if weight < 0)
+            # 2) 최신 작업 큐 덮어쓰기(미완료 작업은 자연 폐기)
+            if boxes:
+                latest_job["frame"] = frame.copy()
+                latest_job["boxes"] = boxes
 
-total = positive_sum + abs(negative_sum)
+            # 3) 최신 마스크 즉시 합성
+            with mask_lock:
+                m = None if last_mask_full is None else last_mask_full.copy()
+            if m is not None:
+                frame = blend_mask_color(frame, m, alpha=args.lime_alpha)
 
-# 통계 정보만 출력
-print("\n=== 충돌 위험 분석 결과 ===")
-print(f"충돌 확률: {conf*100:.1f}%")
-if total > 0:
-    print(f"충돌 위험 영역 기여도: {positive_sum / total * 100:.2f}%")
-    print(f"안전 영역 기여도: {abs(negative_sum) / total * 100:.2f}%")
-else:
-    print("기여도 분석 불가 (탐지된 객체 없음)")
-print("==========================================")
+            # 경고/비프(예: 최고 conf ≥ 0.7)
+            if boxes and boxes[0][5] >= 0.7:
+                notify("Drone Collision Warning!",
+                       f"충돌 위험 감지: {boxes[0][5]*100:.1f}%")
+                beep()
 
-# 객체 탐지 결과도 표시
-results = model.predict(img, verbose=False)
-class_names = ['Building', 'Person', 'Pole', 'Tree', 'Vehicle']
+            # FPS 표시(옵션)
+            if args.show_fps:
+                cnt += 1
+                now = time.time()
+                if now - t0 >= 0.5:
+                    fps = cnt / (now - t0)
+                    t0, cnt = now, 0
+                put_fps(frame, fps)
 
-if len(results[0].boxes) > 0:
-    print("\n=== 탐지된 객체들 ===")
-    max_conf = 0
-    best_obj_info = ""
-    
-    for i, box in enumerate(results[0].boxes):
-        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
-        conf_obj = box.conf[0].item()
-        class_id = int(box.cls[0].item())
-        class_name = class_names[class_id] if class_id < len(class_names) else f"Class_{class_id}"
-        
-        print(f"객체 {i+1}: {class_name}, 좌표=({x1},{y1},{x2},{y2}), 신뢰도={conf_obj:.3f}")
-        
-        if conf_obj > max_conf:
-            max_conf = conf_obj
-            best_obj_info = f"{class_name} 신뢰도: {conf_obj:.3f}"
-    
-    print(f"\nLIME 분석 기준: {best_obj_info}")
-else:
-    print("탐지된 객체 없음")
+            cv2.imshow("Webcam - LIME Streaming", frame)
+            k = cv2.waitKey(1) & 0xFF
+            if k in (ord('q'), 27):
+                break
 
-# 결과 시각화: 원본, 객체 탐지, LIME 설명을 한 화면에 표시
-fig, axes = plt.subplots(1, 3, figsize=(24, 8))
+    finally:
+        cancel_event.set()
+        cap.release()
+        cv2.destroyAllWindows()
 
-# 1. Original Image
-axes[0].imshow(img)
-axes[0].axis("off")
-axes[0].set_title("Original Image")
 
-# 2. Object Detection Result
-img_with_boxes = img.copy()
-results = model.predict(img, verbose=False)
-if len(results[0].boxes) > 0:
-    import matplotlib.patches as patches
-    for box in results[0].boxes:
-        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
-        conf_obj = box.conf[0].item()
-        
-        # 바운딩 박스 그리기
-        rect = patches.Rectangle((x1, y1), x2-x1, y2-y1, 
-                               linewidth=3, edgecolor='yellow', facecolor='none')
-        axes[1].add_patch(rect)
-        axes[1].text(x1, y1-10, f'Conf: {conf_obj:.2f}', 
-                    bbox=dict(facecolor='yellow', alpha=0.8), fontsize=10)
-
-axes[1].imshow(img_with_boxes)
-axes[1].axis("off")
-axes[1].set_title("YOLO Detection Results")
-
-# 3. 개선된 LIME 설명 시각화
-# 더 엄격한 기준으로 긍정적/부정적 기여도 분리
-temp_pos, mask_pos = explanation.get_image_and_mask(
-    label=explanation.top_labels[0],
-    positive_only=True,
-    num_features=3,  # 상위 3개만
-    hide_rest=False,
-    min_weight=0.05,  # 최소 가중치 임계값을 높게 설정
-)
-
-temp_neg, mask_neg = explanation.get_image_and_mask(
-    label=explanation.top_labels[0],
-    positive_only=False,
-    negative_only=True,
-    num_features=3,
-    hide_rest=False,
-    min_weight=-0.05,  # 최소 가중치 임계값을 높게 설정
-)
-
-# 객체 영역 마스크와 교집합만 표시
-if len(results[0].boxes) > 0:
-    # 객체 영역 내에서만 LIME 결과 표시
-    mask_pos = mask_pos & object_mask
-    mask_neg = mask_neg & object_mask
-
-# 마스크 합성하여 표시
-base_img = img.copy() / 255.0
-
-# 긍정적 영역 (초록색) - 충돌 위험
-pos_overlay = base_img.copy()
-if np.any(mask_pos):
-    pos_overlay[mask_pos] = [0, 1, 0]
-    axes[2].imshow(pos_overlay, alpha=0.6)
-
-# 부정적 영역 (빨간색) - 안전 영역
-neg_overlay = base_img.copy()
-if np.any(mask_neg):
-    neg_overlay[mask_neg] = [1, 0, 0]
-    axes[2].imshow(neg_overlay, alpha=0.6)
-
-# 경계선 표시
-if np.any(mask_pos):
-    boundary_pos = mark_boundaries(base_img, mask_pos, color=(0, 1, 0), outline_color=(0, 1, 0), mode="thick")
-    axes[2].imshow(boundary_pos, alpha=0.8)
-
-if np.any(mask_neg):
-    boundary_neg = mark_boundaries(base_img, mask_neg, color=(1, 0, 0), outline_color=(1, 0, 0), mode="thick")
-    axes[2].imshow(boundary_neg, alpha=0.8)
-
-axes[2].axis("off")
-axes[2].set_title("Improved LIME Visualization\n(Green: Collision Risk / Red: Safe Area)\nFiltered & Object-Focused")
-
-# Display guidance/contribution information as text at the top of the screen
-fig.suptitle(
-    f"{'[WARNING] Collision Risk! Probability' if conf >= conf_threshold else '[INFO] Low Collision Risk. Probability'}: {conf*100:.1f}%\n"
-    f"Collision Risk Area Contribution: {positive_sum / total * 100:.2f}% | "
-    f"Safe Area Contribution: {abs(negative_sum) / total * 100:.2f}%\n"
-    f"Object-Focused Analysis | Filtered Low-Contribution Areas",
-    fontsize=16,
-    color="red" if conf >= conf_threshold else "blue",
-)
-
-plt.tight_layout(rect=[0, 0, 1, 0.92])
-plt.show()
+if __name__ == "__main__":
+    main()
