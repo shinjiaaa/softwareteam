@@ -12,13 +12,12 @@ from queue import Queue, Empty  # 스레드 간 안전한 데이터 교환을 �
 import os                       # 파일 시스템 경로 확인
 
 # === Configuration (설정) ===
-# 모델 경로 설정: 시스템 환경에 맞게 수정 필요. 리스트 중 첫 번째로 발견되는 모델 사용.
+# 모델 경로 설정: 학습된 커스텀 모델 또는 기본 모델 사용
 MODEL_PATHS = [
-    # 상대 경로들 (models/explain 기준) 
-    "../../data/runs/detect/train5/weights/best.pt",
-    # 절대 경로들 (프로젝트 루트 기준)
-    "data/runs/detect/train5/weights/best.pt",
-    "D:/SWPBL/softwareteam-KGH/data/runs/detect/train5/weights/best.pt"
+    # 커스텀 모델 (우선 사용)
+    "models/weights/yolov8n_custom.pt",
+    # 기본 사전학습 모델 (자동 다운로드)
+    "yolov8n.pt"
 ]
 CONF_THRESHOLD = 0.5        # 충돌 위험으로 판단할 신뢰도 임계값 (50%)
 LIME_NUM_SAMPLES = 400      # LIME 분석 샘플 수 (값이 클수록 정확하지만 느려짐. 실시간성을 위해 400으로 설정)

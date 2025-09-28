@@ -7,7 +7,7 @@ def continue_training():
     print("="*40)
     
     # 기존 모델 경로
-    existing_model = "../../data/runs/detect/train5/weights/best.pt"
+    existing_model = "../weights/yolov8n_custom.pt"
     
     if not Path(existing_model).exists():
         print(f"모델을 찾을 수 없습니다: {existing_model}")
@@ -50,12 +50,12 @@ def train_with_visdrone():
     print("="*50)
     
     # 기존 향상된 모델 사용
-    existing_model = "../../data/runs/detect/continue_training/weights/best.pt"
+    existing_model = "../weights/yolov8n_custom.pt"
     
     if not Path(existing_model).exists():
-        print(f"❌ 향상된 모델을 찾을 수 없습니다: {existing_model}")
-        print("기본 모델 사용...")
-        existing_model = "../../data/runs/detect/train5/weights/best.pt"
+        print(f"❌ 모델을 찾을 수 없습니다: {existing_model}")
+        print("기본 YOLO 모델을 사용합니다...")
+        existing_model = "yolov8n.pt"  # 기본 모델 자동 다운로드
     
     # VisDrone 변환 데이터 확인
     visdrone_data = "../../data/visdrone_converted/data.yaml"

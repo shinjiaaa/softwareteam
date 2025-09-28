@@ -7,39 +7,15 @@
 import os
 import time
 import argparse
-import subprocess
-from typing import Tuple, List, Optional
+from typing import Optional
 from threading import Thread, Lock, Event
 
 import cv2
 import numpy as np
 from ultralytics import YOLO
 
-# LIME (pip install lime scikit-image)
 from lime import lime_image
 from skimage.segmentation import slic
-
-# ---------- 알림(선택) ----------
-try:
-    from plyer import notification
-
-    def notify(title: str, message: str):
-        try:
-            notification.notify(title=title, message=message, timeout=2)
-        except Exception:
-            pass
-except Exception:
-    def notify(title: str, message: str):
-        pass
-
-
-def beep():
-    """macOS 시스템 사운드(실패 시 무시)."""
-    try:
-        subprocess.Popen(["afplay", "/System/Library/Sounds/Glass.aiff"],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except Exception:
-        pass
 
 # ---------- 유틸 ----------
 
@@ -167,18 +143,15 @@ def main():
                     help="LIME 적용 상위 박스 수(1~3 권장)")
     args = ap.parse_args()
 
-    # 가중치 경로 후보 탐색
+    # 가중치 경로 후보 탐색 (models/weights의 커스텀 모델 우선)
     candidates = [
-        "data/runs/detect/train5/weights/best.pt",
-        "data/runs/detect/train/weights/best.pt",
-        "data/runs/train/weights/best.pt",
-        "data/best.pt",
-        "best.pt",
+        "models/weights/yolov8n_custom.pt",  # 우리가 학습한 커스텀 모델
+        "yolov8n.pt"  # 기본 사전학습 모델 (자동 다운로드)
     ]
     weights = next((c for c in candidates if os.path.exists(c)), None)
     if not weights:
         raise FileNotFoundError(
-            "best.pt 가중치를 찾지 못했습니다. data/runs/.../weights/best.pt 경로 확인")
+            "모델 파일을 찾을 수 없습니다. models/weights/yolov8n_custom.pt 경로를 확인하세요.")
 
     yolo = YOLO(weights)
     try:
@@ -282,8 +255,8 @@ def main():
 
             # 경고/비프(예: 최고 conf ≥ 0.7)
             if boxes and boxes[0][5] >= 0.7:
-                notify("Drone Collision Warning!",
-                       f"충돌 위험 감지: {boxes[0][5]*100:.1f}%")
+                from alert.alert_main import notify, beep
+                notify("드론 충돌 경고!", f"충돌 위험 감지: {boxes[0][5]*100:.1f}%")
                 beep()
 
             # FPS 표시(옵션)

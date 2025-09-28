@@ -14,11 +14,10 @@ import traceback
 
 # === Configuration (설정) ===
 MODEL_PATHS = [
-    # 상대 경로들 (models/explain 기준) 
-    #"../../data/runs/detect/train5/weights/best.pt",
-    # 절대 경로들 (프로젝트 루트 기준)
-    "data/runs/detect/train5/weights/best.pt",
-    "D:/SWPBL/softwareteam-KGH/data/runs/detect/train5/weights/best.pt"
+    # 학습된 커스텀 모델 (안정화된 버전)
+    "models/weights/yolov8n_custom.pt",
+    # 기본 사전학습 모델 (자동 다운로드)
+    "yolov8n.pt"
 ]
 CONF_THRESHOLD = 0.5
 
