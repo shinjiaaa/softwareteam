@@ -33,13 +33,3 @@ pip install fastapi uvicorn[standard] djitellopy opencv-python-headless ultralyt
 http://127.0.0.1:8000
 
 드론 연결 후 python app.py 실행
-
-파일 구조
-softwareteam-main/
-├── app.py               # FastAPI 메인 서버
-├── drone_manager.py     # 드론 제어 및 통합 관리
-├── detector.py          # CollisionDetectorLIME 클래스 (AI 로직)
-└── static/
-    ├── index.html       # 대시보드 UI (HTML)
-    ├── client.js        # 프론트엔드 로직 (JavaScript)
-    └── style.css        # 스타일링 (CSS)
