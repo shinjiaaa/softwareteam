@@ -24,3 +24,18 @@
     2. data_test.py: model이 image를 보고 충돌 가능성이 있는 객체인지 확인하는 파일
     3. data_explain.py: (LIME) model이 왜 충돌 가능성이 있는 객체라고 판단했는지 설명하는 파일
 5. ui: 유저 인터페이스 (frontend)
+
+## 대시보드 실행법
+라이브러리 설치 pip install fastapi uvicorn[standard] djitellopy opencv-python-headless ultralytics lime scikit-image numpy
+대시보드 접속 http://127.0.0.1:8000
+드론 연결 후 python app.py 실행
+
+파일 구조
+softwareteam/
+├── app.py               # FastAPI 메인 서버
+├── drone_manager.py     # 드론 제어 및 통합 관리
+├── detector.py          # CollisionDetectorLIME 클래스 (AI 로직)
+└── static/
+    ├── index.html       # 대시보드 UI (HTML)
+    ├── client.js        # 프론트엔드 로직 (JavaScript)
+    └── style.css        # 스타일링 (CSS)
