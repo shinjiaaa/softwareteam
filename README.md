@@ -26,12 +26,16 @@
 5. ui: 유저 인터페이스 (frontend)
 
 ## 대시보드 실행법
-라이브러리 설치 pip install fastapi uvicorn[standard] djitellopy opencv-python-headless ultralytics lime scikit-image numpy
-대시보드 접속 http://127.0.0.1:8000
+라이브러리 설치 
+pip install fastapi uvicorn[standard] djitellopy opencv-python-headless ultralytics lime scikit-image numpy
+
+대시보드 접속 
+http://127.0.0.1:8000
+
 드론 연결 후 python app.py 실행
 
 파일 구조
-softwareteam/
+softwareteam-main/
 ├── app.py               # FastAPI 메인 서버
 ├── drone_manager.py     # 드론 제어 및 통합 관리
 ├── detector.py          # CollisionDetectorLIME 클래스 (AI 로직)
