@@ -13,7 +13,7 @@ data/runs/detect/*/weights/
 
 runs/
 DDOS/
-datasets/
+dataset/
 
 
 *.zip
