@@ -11,6 +11,11 @@ data/dataset/train/images_det/
 data/runs/detect/train*/weights/
 data/runs/detect/*/weights/
 
+runs/
+DDOS/
+datasets/
+
+
 *.zip
 *.rar
 *.tar.gz

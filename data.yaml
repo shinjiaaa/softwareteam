@@ -1,0 +1,13 @@
+path: C:/Users/lab/softwareteam/datasets/ddos_dataset
+
+train: images/train
+val: images/val
+
+nc: 5
+
+names:
+  0: car
+  1: tree
+  2: building
+  3: person
+  4: other
