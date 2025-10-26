@@ -12,8 +12,9 @@ data/runs/detect/train*/weights/
 data/runs/detect/*/weights/
 
 runs/
-DDOS/
+runs/detect/
 dataset/
+datasets/
 
 
 *.zip
