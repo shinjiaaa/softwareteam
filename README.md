@@ -12,17 +12,18 @@
 7. main에 변경 사항이 있을 경우, 터미널에 git pull origin main 입력 후 개발 진행 (가장 최신 코드에서 작업하기 위함)
 
 ## Directory
-1. model 경로: runs/detect/exp/weights/best.pt
-2. dataset/: train, valid, test 폴더 내 각 image, lebel 존재함
-3. static/: UI
-4. app.py: 엔드포인트 정의 및 UI 실행 함수
-5. detector.py: 실시간 영상 사용하여 yolo, lime 적용
-6. drone_manager.py: 드론 제어
+1. model 경로: runs/detect/VisDrone_train4/weights/best.pt
+2. dataset/: 첫 번째 데이터셋 폴더
+3. datasets/: 두 번째 데이터셋 폴더 - 추후 2번과 통합
+4. static/: UI
+5. app.py: 엔드포인트 정의 및 UI 실행 함수
+6. detector.py: 실시간 영상 사용하여 yolo, lime 적용
+7. drone_manager.py: 드론 제어
 
 ## 출처
 1. dataset
    1. https://universe.roboflow.com/tylervisimoai/drone-crash-avoidance
-   2. https://github.com/VisDrone/VisDrone-Dataset (Task 2)
+   2. https://github.com/VisDrone/VisDrone-Dataset
 
 ## 대시보드 실행법
 대시보드 접속 
