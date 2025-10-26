@@ -9,7 +9,7 @@ data/visdrone_converted/
 data/dataset/train/videos/
 data/dataset/train/images_det/
 
-*.pt
+
 data/runs/detect/train*/weights/
 data/runs/detect/*/weights/
 
