@@ -62,25 +62,74 @@ def draw_boxes(frame, results, conf_thres=0.35, names=None):
         boxes_info.append((x1, y1, x2, y2, cls, conf)) # 리스트에 좌표 추가
     return frame, boxes_info
 
+# 두 코드 합쳐서 하나의 함수에 삽입했습니다 
 # 단일 픽셀 시각화
-def _blend_single(bg: np.ndarray, fg_color_bgr: Tuple[int, int, int], mask: np.ndarray, alpha: float) -> np.ndarray:
-    if mask is None or np.max(mask) == 0: 
-        return bg
+# def _blend_single(bg: np.ndarray, fg_color_bgr: Tuple[int, int, int], mask: np.ndarray, alpha: float) -> np.ndarray:
+#     if mask is None or np.max(mask) == 0: 
+#         return bg
     
-    m = cv2.GaussianBlur(mask, (0, 0), 2.5); m3 = cv2.merge([m, m, m])
-    fg = np.zeros_like(bg); fg[:] = fg_color_bgr
-    out = (bg.astype(np.float32) * (1.0 - alpha*m3) + fg.astype(np.float32) * (alpha*m3))
+#     m = cv2.GaussianBlur(mask, (0, 0), 2.5); m3 = cv2.merge([m, m, m])
+#     fg = np.zeros_like(bg); fg[:] = fg_color_bgr
+#     out = (bg.astype(np.float32) * (1.0 - alpha*m3) + fg.astype(np.float32) * (alpha*m3))
 
-    return np.clip(out, 0, 255).astype(np.uint8)
+#     return np.clip(out, 0, 255).astype(np.uint8)
 
-# 긍/부정 픽셀 둘 다 시각화 (위 두 함수 중 하나만 넣어도 되지 않을까요)
-def blend_dual_mask_sequential(frame_bgr: np.ndarray, pos_mask01: np.ndarray, neg_mask01: np.ndarray, alpha: float = 0.65) -> np.ndarray:
+# 긍/부정 픽셀 시각화
+# def blend_dual_mask_sequential(frame_bgr: np.ndarray, pos_mask01: np.ndarray, neg_mask01: np.ndarray, alpha: float = 0.65) -> np.ndarray:
+#     h, w = frame_bgr.shape[:2]
+#     if pos_mask01 is None or neg_mask01 is None or pos_mask01.shape != (h, w): return frame_bgr
+#     COLOR_GREEN = (0, 255, 0); COLOR_RED = (0, 0, 255)
+#     out = _blend_single(frame_bgr, COLOR_GREEN, neg_mask01, alpha * 0.9)
+#     out = _blend_single(out, COLOR_RED, pos_mask01, alpha)
+#     return out
+
+# 긍/부정 픽셀 시각화 - 위 두 함수 합친 ver
+def blend_dual_mask_sequential(frame_bgr: np.ndarray,
+                         pos_mask01: np.ndarray,
+                         neg_mask01: np.ndarray,
+                         alpha: float = 0.65) -> np.ndarray:
+
+    if pos_mask01 is None or neg_mask01 is None:
+        return frame_bgr
+
     h, w = frame_bgr.shape[:2]
-    if pos_mask01 is None or neg_mask01 is None or pos_mask01.shape != (h, w): return frame_bgr
-    COLOR_GREEN = (0, 255, 0); COLOR_RED = (0, 0, 255)
-    out = _blend_single(frame_bgr, COLOR_GREEN, neg_mask01, alpha * 0.9)
-    out = _blend_single(out, COLOR_RED, pos_mask01, alpha)
-    return out
+    if pos_mask01.shape != (h, w) or neg_mask01.shape != (h, w):
+        return frame_bgr
+
+    # GaussianBlur 최소화
+    pos_blur = cv2.GaussianBlur(pos_mask01, (0, 0), 2.5)
+    neg_blur = cv2.GaussianBlur(neg_mask01, (0, 0), 2.5)
+
+    # RGB 채널 분리 후 직접 계산
+    # frame = frame_bgr.astype(np.float32)
+    # red_layer = np.zeros_like(frame)
+    # green_layer = np.zeros_like(frame)
+
+    # red_layer[:, :, 2] = 255  # RED
+    # green_layer[:, :, 1] = 255  # GREEN
+
+    # # 3채널 mask로 확장
+    # pos_m3 = cv2.merge([pos_blur, pos_blur, pos_blur])
+    # neg_m3 = cv2.merge([neg_blur, neg_blur, neg_blur])
+
+    # # 최종 블렌딩
+    # out = frame * (1 - alpha * (pos_m3 + neg_m3)) \
+    #       + red_layer * (alpha * pos_m3) \
+    #       + green_layer * (alpha * 0.9 * neg_m3)
+    
+    # return np.clip(out, 0, 255).astype(np.uint8)
+
+    # 속도 향상을 위해 위 코드 개선 - out 변수를 따로 만들지 않고 바로 frame에 적용
+    frame = frame_bgr.astype(np.float32)
+    pos_w = alpha * pos_blur[..., None]
+    neg_w = alpha * 0.9 * neg_blur[..., None]
+
+    # RED 채널에 pos, GREEN 채널에 neg 가중
+    frame[..., 2] += (255 - frame[..., 2]) * pos_w
+    frame[..., 1] += (255 - frame[..., 1]) * neg_w
+    frame *= (1 - pos_w - neg_w)
+
+    return np.clip(frame, 0, 255).astype(np.uint8)
 
 # LIME
 
@@ -314,4 +363,5 @@ class CollisionDetectorLIME:
         now = time.time()
         
         if now - self.t0 >= 0.5:
-            self.fps = self.cnt / (now - self.t0); self.t0, self.cnt = now, 0
+            self.fps = self.cnt / (now - self.t0)
+            self.t0, self.cnt = now, 0
