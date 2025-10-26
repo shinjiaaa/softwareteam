@@ -20,7 +20,7 @@ weave.init("tlswldk122104-gnu/intro-example")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 
-# AI 리포트 함수 (YOLO 성능을 자연어로 요약)
+# AI 리포트 함수 (YOLO 성능을 자연어로 요약 - 이건 유료라서... 모델 개선 다 되면 요약 지우고 wandb만 남길게요)
 @weave.op()
 def create_completion(message: str) -> str:
     response = client.chat.completions.create(
