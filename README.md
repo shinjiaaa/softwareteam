@@ -26,6 +26,7 @@
    2. https://github.com/VisDrone/VisDrone-Dataset
 
 ## 대시보드 실행법
+pip install -r requirements.txt
 대시보드 접속 
 http://127.0.0.1:8000
 
