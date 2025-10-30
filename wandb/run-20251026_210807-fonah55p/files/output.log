@@ -1,0 +1,5 @@
+[34m[1mwandb[0m: Initializing weave.
+[36m[1mweave[0m: weave version 0.52.11 is available!  To upgrade, please run:
+[36m[1mweave[0m:  $ pip install weave --upgrade
+[36m[1mweave[0m: Logged in as Weights & Biases user: tlswldk122104.
+[36m[1mweave[0m: View Weave data at https://wandb.ai/tlswldk122104-gnu/YOLO-Evaluation/weave

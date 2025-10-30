@@ -1,0 +1,40 @@
+{
+  "os": "Windows-10-10.0.19045-SP0",
+  "python": "CPython 3.10.18",
+  "startedAt": "2025-10-26T12:08:07.612700Z",
+  "program": "C:\\Users\\lab\\softwareteam\\eval.py",
+  "codePath": "eval.py",
+  "codePathLocal": "eval.py",
+  "git": {
+    "remote": "https://github.com/shinjiaaa/softwareteam.git",
+    "commit": "d720ae879f752dfeb3293bda1e86563d9323b072"
+  },
+  "email": "tlswldk122104@naver.com",
+  "root": "C:\\Users\\lab\\softwareteam",
+  "host": "DESKTOP-CMOIPGE",
+  "executable": "C:\\Users\\lab\\anaconda3\\envs\\yolov8\\python.exe",
+  "cpu_count": 6,
+  "cpu_count_logical": 12,
+  "gpu": "NVIDIA GeForce RTX 2060",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "1023522574336",
+      "used": "494406672384"
+    }
+  },
+  "memory": {
+    "total": "17009278976"
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA GeForce RTX 2060",
+      "memoryTotal": "6442450944",
+      "cudaCores": 1920,
+      "architecture": "Turing",
+      "uuid": "GPU-33356dda-0fda-2c92-1178-539ebb2d5209"
+    }
+  ],
+  "cudaVersion": "12.6",
+  "writerId": "yrmlboim0yhmrs6h0j08r5ip5oc7byzd"
+}
