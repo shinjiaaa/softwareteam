@@ -1,0 +1,56 @@
+_wandb:
+    value:
+        cli_version: 0.22.2
+        e:
+            i1negn07gzddc7s5n8743qya9urk90m0:
+                codePath: eval.py
+                codePathLocal: eval.py
+                cpu_count: 6
+                cpu_count_logical: 12
+                cudaVersion: "12.6"
+                disk:
+                    /:
+                        total: "1023522574336"
+                        used: "494425055232"
+                email: tlswldk122104@naver.com
+                executable: C:\Users\lab\anaconda3\envs\yolov8\python.exe
+                git:
+                    commit: d720ae879f752dfeb3293bda1e86563d9323b072
+                    remote: https://github.com/shinjiaaa/softwareteam.git
+                gpu: NVIDIA GeForce RTX 2060
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Turing
+                      cudaCores: 1920
+                      memoryTotal: "6442450944"
+                      name: NVIDIA GeForce RTX 2060
+                      uuid: GPU-33356dda-0fda-2c92-1178-539ebb2d5209
+                host: DESKTOP-CMOIPGE
+                memory:
+                    total: "17009278976"
+                os: Windows-10-10.0.19045-SP0
+                program: C:\Users\lab\softwareteam\eval.py
+                python: CPython 3.10.18
+                root: C:\Users\lab\softwareteam
+                startedAt: "2025-10-26T12:12:11.321189Z"
+                writerId: i1negn07gzddc7s5n8743qya9urk90m0
+        m: []
+        python_version: 3.10.18
+        t:
+            "1":
+                - 1
+                - 41
+                - 95
+            "2":
+                - 1
+                - 41
+                - 95
+            "3":
+                - 2
+                - 13
+            "4": 3.10.18
+            "5": 0.22.2
+            "8":
+                - 3
+            "12": 0.22.2
+            "13": windows-amd64

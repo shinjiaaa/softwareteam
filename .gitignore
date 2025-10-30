@@ -9,7 +9,6 @@ data/visdrone_converted/
 data/dataset/train/videos/
 data/dataset/train/images_det/
 
-
 data/runs/detect/train*/weights/
 data/runs/detect/*/weights/
 
@@ -17,7 +16,6 @@ runs/
 runs/detect/
 dataset/
 datasets/
-
 
 *.zip
 *.rar

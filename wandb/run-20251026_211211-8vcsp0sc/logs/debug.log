@@ -1,0 +1,26 @@
+2025-10-26 21:12:11,325 INFO    MainThread:24896 [wandb_setup.py:_flush():81] Current SDK version is 0.22.2
+2025-10-26 21:12:11,325 INFO    MainThread:24896 [wandb_setup.py:_flush():81] Configure stats pid to 24896
+2025-10-26 21:12:11,325 INFO    MainThread:24896 [wandb_setup.py:_flush():81] Loading settings from C:\Users\lab\.config\wandb\settings
+2025-10-26 21:12:11,325 INFO    MainThread:24896 [wandb_setup.py:_flush():81] Loading settings from C:\Users\lab\softwareteam\wandb\settings
+2025-10-26 21:12:11,325 INFO    MainThread:24896 [wandb_setup.py:_flush():81] Loading settings from environment variables
+2025-10-26 21:12:11,326 INFO    MainThread:24896 [wandb_init.py:setup_run_log_directory():705] Logging user logs to C:\Users\lab\softwareteam\wandb\run-20251026_211211-8vcsp0sc\logs\debug.log
+2025-10-26 21:12:11,327 INFO    MainThread:24896 [wandb_init.py:setup_run_log_directory():706] Logging internal logs to C:\Users\lab\softwareteam\wandb\run-20251026_211211-8vcsp0sc\logs\debug-internal.log
+2025-10-26 21:12:11,327 INFO    MainThread:24896 [wandb_init.py:init():832] calling init triggers
+2025-10-26 21:12:11,327 INFO    MainThread:24896 [wandb_init.py:init():837] wandb.init called with sweep_config: {}
+config: {'_wandb': {}}
+2025-10-26 21:12:11,327 INFO    MainThread:24896 [wandb_init.py:init():880] starting backend
+2025-10-26 21:12:13,589 INFO    MainThread:24896 [wandb_init.py:init():883] sending inform_init request
+2025-10-26 21:12:13,624 INFO    MainThread:24896 [wandb_init.py:init():891] backend started and connected
+2025-10-26 21:12:13,625 INFO    MainThread:24896 [wandb_init.py:init():961] updated telemetry
+2025-10-26 21:12:13,668 INFO    MainThread:24896 [wandb_init.py:init():985] communicating run to backend with 90.0 second timeout
+2025-10-26 21:12:14,265 INFO    MainThread:24896 [wandb_init.py:init():1036] starting run threads in backend
+2025-10-26 21:12:14,467 INFO    MainThread:24896 [wandb_run.py:_console_start():2509] atexit reg
+2025-10-26 21:12:14,468 INFO    MainThread:24896 [wandb_run.py:_redirect():2357] redirect: wrap_raw
+2025-10-26 21:12:14,468 INFO    MainThread:24896 [wandb_run.py:_redirect():2426] Wrapping output streams.
+2025-10-26 21:12:14,468 INFO    MainThread:24896 [wandb_run.py:_redirect():2449] Redirects installed.
+2025-10-26 21:12:14,471 INFO    MainThread:24896 [wandb_init.py:init():1076] run started, returning control to user process
+2025-10-26 21:12:18,674 INFO    MainThread:24896 [wandb_run.py:_finish():2275] finishing run tlswldk122104-gnu/YOLO-Evaluation/8vcsp0sc
+2025-10-26 21:12:18,675 INFO    MainThread:24896 [wandb_run.py:_atexit_cleanup():2474] got exitcode: 0
+2025-10-26 21:12:18,675 INFO    MainThread:24896 [wandb_run.py:_restore():2456] restore
+2025-10-26 21:12:18,675 INFO    MainThread:24896 [wandb_run.py:_restore():2462] restore done
+2025-10-26 21:12:19,650 INFO    MainThread:24896 [wandb_run.py:_footer_sync_info():3872] logging synced files
