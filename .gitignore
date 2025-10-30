@@ -16,6 +16,7 @@ runs/
 runs/detect/
 dataset/
 datasets/
+wandb/
 
 *.zip
 *.rar
