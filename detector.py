@@ -5,7 +5,6 @@ from threading import Thread, Lock, Event
 from ultralytics import YOLO
 from lime import lime_image
 from skimage.segmentation import slic
-from sklearn.metrics import precision_score, recall_score, f1_score
 
 # 상단에 위험도 바 시각화
 def draw_risk_indicator(frame, max_conf, warning_threshold):
@@ -151,29 +150,6 @@ def lime_mask_on_roi_weighted(roi_bgr: np.ndarray, model: YOLO, class_id: int,
     except Exception as e:
         return np.zeros((h, w), dtype=np.float32), np.zeros((h, w), dtype=np.float32)
 
-# GT 박스와 LIME 마스크 비교 평가 함수
-def mask_from_boxes(boxes, frame_shape):
-    mask = np.zeros(frame_shape[:2], dtype=np.uint8)
-    for box in boxes:
-        x1, y1, x2, y2 = map(int, box[:4])
-        mask[y1:y2, x1:x2] = 1
-    return mask
-
-    # GT 박스와 LIME 마스크 비교 평가 함수
-def evaluate_lime_vs_gt(lime_mask, gt_boxes, frame_shape):
-    gt_mask = mask_from_boxes(gt_boxes, frame_shape)
-    y_pred = (lime_mask > 0.5).astype(np.uint8).flatten()  # 0.5 이상 -> 강조 영역
-    y_true = gt_mask.flatten()
-
-    intersection = np.logical_and(y_true, y_pred).sum()
-    union = np.logical_or(y_true, y_pred).sum()
-    iou = intersection / union if union > 0 else 0.0
-
-    precision = precision_score(y_true, y_pred, zero_division=0)
-    recall = recall_score(y_true, y_pred, zero_division=0)
-    f1 = f1_score(y_true, y_pred, zero_division=0)
-
-    return {"IoU": iou, "Precision": precision, "Recall": recall, "F1": f1}
 
 # Collision Detection
 
@@ -322,8 +298,6 @@ class CollisionDetectorLIME:
                     m_pos = self.last_mask_pos.copy(); m_neg = self.last_mask_neg.copy()
 
         if m_pos is not None and m_neg is not None:
-            metrics = evaluate_lime_vs_gt(m_pos, gt_boxes, processed_frame.shape)
-            print("[GT 검증]", metrics)
             processed_frame = blend_dual_mask_sequential(processed_frame, m_pos, m_neg, alpha=cfg["lime_alpha"])
 
         max_conf = boxes[0][5] if boxes else 0.0
