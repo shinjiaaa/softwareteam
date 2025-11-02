@@ -147,8 +147,9 @@ def lime_mask_on_roi_weighted(roi_bgr: np.ndarray, model: YOLO, class_id: int,
         )
         label = explanation.top_labels[0]; segments = explanation.segments
         local_exp = explanation.local_exp[label]
-        sorted_exp = sorted(local_exp, key=lambda item: abs(item[1]), reverse=True)[:num_features]
-        pos_mask = np.zeros((h, w), dtype=np.float32); neg_mask = np.zeros((h, w), dtype=np.float32)
+        sorted_exp = sorted(local_exp, key=lambda item: abs(item[1]), reverse=True)[:2]
+        pos_mask = np.zeros((h, w), dtype=np.float32)
+        neg_mask = np.zeros((h, w), dtype=np.float32)
 
         if not sorted_exp: 
             return pos_mask, neg_mask
@@ -161,7 +162,9 @@ def lime_mask_on_roi_weighted(roi_bgr: np.ndarray, model: YOLO, class_id: int,
             elif weight < 0: 
                 neg_mask[mask_area] = abs(weight)
 
-        max_weight = max(abs(w) for _, w in sorted_exp)
+        max_weight = max(abs(w) for _, w in sorted_exp) if sorted_exp else 1.0
+        pos_mask = np.clip(pos_mask / max_weight, 0.0, 1.0)
+        neg_mask = np.clip(neg_mask / max_weight, 0.0, 1.0)
 
         if max_weight > 0:
             pos_mask = np.clip(pos_mask / max_weight, 0.0, 1.0)
@@ -301,36 +304,40 @@ class CollisionDetectorLIME:
         cfg = self.get_config()
         results = self.yolo.predict(source=frame_bgr, imgsz=cfg["imgsz"], verbose=False)
 
-        # 박스 추출 + 최종 프레임에 바로 그리기
+        # 박스 추출
         processed_frame = frame_bgr.copy()
         processed_frame, boxes = draw_boxes(
             processed_frame, results, conf_thres=cfg["conf_thres"], names=self.names
         )
 
-        # 각 객체 거리 계산 & 텍스트 표시
+        # 거리 계산 (가장 가까운 객체 선택)
+        closest_box = None
+        min_distance = float("inf")
         for box in boxes:
             x1, y1, x2, y2, cls, conf = box
-            distance = estimate_distance([x1, y1, x2, y2], cls)
-            cv2.putText(processed_frame, f"D={distance:.1f}m", (x1, y2+15),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 1, cv2.LINE_AA)
+            distance = estimate_distance(box, cls)  # 클래스별 높이 기반 거리
+            if distance < min_distance:
+                min_distance = distance
+                closest_box = box
 
         # 최신 작업 저장 (LIME 백그라운드 처리용)
-        if boxes:
+        if closest_box is not None:
             with self.data_lock:
                 self.latest_job["frame"] = frame_bgr.copy()
-                self.latest_job["boxes"] = boxes
+                self.latest_job["boxes"] = [closest_box]
 
         # LIME 마스크 적용
         m_pos, m_neg = None, None
         with self.data_lock:
             if self.last_mask_pos is not None and self.last_mask_neg is not None:
                 if self.last_mask_pos.shape[:2] == processed_frame.shape[:2]:
-                    m_pos = self.last_mask_pos.copy(); m_neg = self.last_mask_neg.copy()
+                    m_pos = self.last_mask_pos.copy()
+                    m_neg = self.last_mask_neg.copy()
 
         if m_pos is not None and m_neg is not None:
             processed_frame = blend_dual_mask_sequential(processed_frame, m_pos, m_neg, alpha=cfg["lime_alpha"])
 
-        max_conf = boxes[0][5] if boxes else 0.0
+        max_conf = closest_box[5] if closest_box else 0.0
 
         # 위험도 평가
         risk_data = self._evaluate_risk(max_conf)
@@ -338,8 +345,6 @@ class CollisionDetectorLIME:
         self._calculate_fps()
 
         return processed_frame, risk_data
-
-
 
     # FPS 계산
     def _calculate_fps(self):
