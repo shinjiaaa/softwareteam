@@ -15,6 +15,7 @@ CLASS_HEIGHTS = {
     4: 0.5    # other, 임의값
 }
 
+
 # 단일 카메라 초점거리 (픽셀 단위, f_x)
 FOCAL_LENGTH_PIXELS = 1400  # 카메라 스펙에 맞게 수정
 
@@ -347,6 +348,7 @@ class CollisionDetectorLIME:
         self._calculate_fps()
 
         return processed_frame, risk_data
+
 
     # FPS 계산
     def _calculate_fps(self):
