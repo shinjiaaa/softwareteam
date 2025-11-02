@@ -5,6 +5,7 @@ from threading import Thread, Lock, Event
 from ultralytics import YOLO
 from lime import lime_image
 from skimage.segmentation import slic
+from typing import Tuple, Dict, Any
 
 # 상단에 위험도 바 시각화
 def draw_risk_indicator(frame, max_conf, warning_threshold):
@@ -274,38 +275,83 @@ class CollisionDetectorLIME:
     def process_frame(self, frame_bgr: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
         if frame_bgr is None:
             return frame_bgr, self._evaluate_risk(0.0)
-        
-        cfg = self.get_config()
-        results = self.yolo.predict(source=frame_bgr, imgsz=cfg["imgsz"], verbose=False)
 
-        # 박스 추출 + 최종 프레임에 바로 그리기
-        processed_frame = frame_bgr.copy()
+        # 카메라 파라미터 로드
+        with np.load('camera_params.npz') as data:
+            camera_matrix = data['camera_matrix']
+            dist_coeffs = data['dist_coeffs']
+        fx = camera_matrix[0, 0]
+        fy = camera_matrix[1, 1]
+        cx = camera_matrix[0, 2]
+        cy = camera_matrix[1, 2]
+
+        # 프레임 왜곡 보정
+        frame_undistorted = cv2.undistort(frame_bgr, camera_matrix, dist_coeffs)
+
+        # YOLO 예측
+        cfg = self.get_config()
+        results = self.yolo.predict(source=frame_undistorted, imgsz=cfg["imgsz"], verbose=False)
+
+        processed_frame = frame_undistorted.copy()
         processed_frame, boxes = draw_boxes(
             processed_frame, results, conf_thres=cfg["conf_thres"], names=self.names
         )
 
+        # 박스 중심점 기반 실제 거리 추정
+        real_world_positions = []
+        known_object_height_cm = 170.0  # 예: 사람의 평균 키 170cm (물체별로 조정 가능)
+
+        for box in boxes:
+            x1, y1, x2, y2, conf, cls_id = box
+            u = (x1 + x2) / 2  # 중심점 X (픽셀)
+            v = (y1 + y2) / 2  # 중심점 Y (픽셀)
+            box_height = y2 - y1  # 박스 높이 (픽셀)
+
+            # 깊이 Z 추정: 실제 높이 × 초점거리 / 픽셀 높이
+            Z = (known_object_height_cm * fy) / box_height
+            # 정규화된 이미지 좌표계로 변환
+            x_norm = (u - cx) / fx
+            y_norm = (v - cy) / fy
+
+            # 실세계 좌표 (cm 단위)
+            X = x_norm * Z
+            Y = y_norm * Z
+
+            real_world_positions.append((X, Y, Z))
+
+            # 프레임 위에 표시
+            label = f"{self.names[int(cls_id)]}: {Z/100:.2f}m"
+            cv2.putText(processed_frame, label, (int(u), int(v) - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            cv2.circle(processed_frame, (int(u), int(v)), 5, (0, 0, 255), -1)
+
+        # 최신 프레임 및 박스 저장
         if boxes:
             with self.data_lock:
                 self.latest_job["frame"] = frame_bgr.copy()
                 self.latest_job["boxes"] = boxes
 
+        # 마스크 중첩 처리 (LIME 등)
         m_pos, m_neg = None, None
         with self.data_lock:
             if self.last_mask_pos is not None and self.last_mask_neg is not None:
                 if self.last_mask_pos.shape[:2] == processed_frame.shape[:2]:
-                    m_pos = self.last_mask_pos.copy(); m_neg = self.last_mask_neg.copy()
+                    m_pos = self.last_mask_pos.copy()
+                    m_neg = self.last_mask_neg.copy()
 
         if m_pos is not None and m_neg is not None:
-            processed_frame = blend_dual_mask_sequential(processed_frame, m_pos, m_neg, alpha=cfg["lime_alpha"])
+            processed_frame = blend_dual_mask_sequential(
+                processed_frame, m_pos, m_neg, alpha=cfg["lime_alpha"]
+            )
 
+        # 위험도 평가 및 FPS 계산
         max_conf = boxes[0][5] if boxes else 0.0
-
-        # 위험도 평가
         risk_data = self._evaluate_risk(max_conf)
         draw_risk_indicator(processed_frame, max_conf, cfg["warning_threshold"])
         self._calculate_fps()
 
         return processed_frame, risk_data
+
 
 
     # FPS 계산
