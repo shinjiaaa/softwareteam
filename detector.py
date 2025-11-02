@@ -6,6 +6,27 @@ from ultralytics import YOLO
 from lime import lime_image
 from skimage.segmentation import slic
 
+# 클래스별 실제 높이 (m 단위)
+CLASS_HEIGHTS = {
+    0: 1.5,   # car 평균 높이
+    1: 5.0,   # tree 평균 높이
+    2: 10.0,  # building 평균 높이
+    3: 1.7,   # person 평균 키
+    4: 0.5    # other, 임의값
+}
+
+
+# 단일 카메라 초점거리 (픽셀 단위, f_x)
+FOCAL_LENGTH_PIXELS = 1400  # 카메라 스펙에 맞게 수정
+
+# 픽셀 높이 → 실제 거리 계산 함수
+def estimate_distance(box, class_id):
+    y1, y2 = box[1], box[3]
+    h_pixels = max(y2 - y1, 1)
+    H_actual = CLASS_HEIGHTS.get(class_id, 1.7)
+    Z = (H_actual * FOCAL_LENGTH_PIXELS) / h_pixels
+    return Z
+
 # 상단에 위험도 바 시각화
 def draw_risk_indicator(frame, max_conf, warning_threshold):
     h, w = frame.shape[:2]
@@ -269,6 +290,8 @@ class CollisionDetectorLIME:
             "text": text,
             "alert_event": alert_event
         }
+    
+    
 
     # 메인 처리 함수 - yolo, lime, bbox & 픽셀 시각화, 위험 데이터 반환
     def process_frame(self, frame_bgr: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
@@ -283,6 +306,13 @@ class CollisionDetectorLIME:
         processed_frame, boxes = draw_boxes(
             processed_frame, results, conf_thres=cfg["conf_thres"], names=self.names
         )
+
+        # 각 객체 거리 계산 & 텍스트 표시
+        for box in boxes:
+            x1, y1, x2, y2, cls, conf = box
+            distance = estimate_distance([x1, y1, x2, y2], cls)
+            cv2.putText(processed_frame, f"D={distance:.1f}m", (x1, y2+15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 1, cv2.LINE_AA)
 
         # 최신 작업 저장 (LIME 백그라운드 처리용)
         if boxes:
@@ -308,6 +338,7 @@ class CollisionDetectorLIME:
         self._calculate_fps()
 
         return processed_frame, risk_data
+
 
 
     # FPS 계산
