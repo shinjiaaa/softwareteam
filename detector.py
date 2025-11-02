@@ -15,7 +15,6 @@ CLASS_HEIGHTS = {
     4: 0.5    # other, 임의값
 }
 
-
 # 단일 카메라 초점거리 (픽셀 단위, f_x)
 FOCAL_LENGTH_PIXELS = 1400  # 카메라 스펙에 맞게 수정
 
@@ -95,13 +94,21 @@ def _blend_single(bg: np.ndarray, fg_color_bgr: Tuple[int, int, int], mask: np.n
     return np.clip(out, 0, 255).astype(np.uint8)
 
 # 긍/부정 픽셀 시각화
-def blend_dual_mask_sequential(frame_bgr: np.ndarray, pos_mask01: np.ndarray, neg_mask01: np.ndarray, alpha: float = 0.65) -> np.ndarray:
-    h, w = frame_bgr.shape[:2]
-    if pos_mask01 is None or neg_mask01 is None or pos_mask01.shape != (h, w): return frame_bgr
-    COLOR_GREEN = (0, 255, 0); COLOR_RED = (0, 0, 255)
-    out = _blend_single(frame_bgr, COLOR_GREEN, neg_mask01, alpha * 0.9)
-    out = _blend_single(out, COLOR_RED, pos_mask01, alpha)
-    return out
+# def blend_dual_mask_sequential(frame_bgr: np.ndarray, pos_mask01: np.ndarray, neg_mask01: np.ndarray, alpha: float = 0.65) -> np.ndarray:
+#     h, w = frame_bgr.shape[:2]
+#     if pos_mask01 is None or neg_mask01 is None or pos_mask01.shape != (h, w): return frame_bgr
+#     COLOR_GREEN = (0, 255, 0)
+#     COLOR_RED = (0, 0, 255)
+#     out = _blend_single(frame_bgr, COLOR_GREEN, neg_mask01, alpha * 0.9)
+#     out = _blend_single(out, COLOR_RED, pos_mask01, alpha)
+#     return out
+
+def blend_dual_mask_sequential(frame_bgr: np.ndarray, danger_mask: np.ndarray, alpha: float = 0.65) -> np.ndarray:
+    if danger_mask is None or np.max(danger_mask) == 0:
+        return frame_bgr
+    COLOR_RED = (0, 0, 255)  # 위험 영역 표시
+    return _blend_single(frame_bgr, COLOR_RED, danger_mask, alpha)
+
 
 # LIME
 
@@ -113,7 +120,7 @@ def make_predict_fn_for_roi(model: YOLO, class_id: int):
     def predict_proba(batch_rgb: np.ndarray) -> np.ndarray:
         bgr_batch = [cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR) for rgb in batch_rgb]
         try:
-            results = model.predict(source=bgr_batch, verbose=False, imgsz=320) # batch 처리 -> 속도 향상
+            results = model.predict(source=bgr_batch, verbose=False, imgsz=640) # batch 처리 -> 속도 향상
         except Exception as e:
             print(f"[WARN] YOLO batch prediction error: {e}")
             return np.array([[1.0, 0.0]] * len(batch_rgb), dtype=np.float32)
@@ -182,7 +189,7 @@ def lime_mask_on_roi_weighted(roi_bgr: np.ndarray, model: YOLO, class_id: int,
 class CollisionDetectorLIME:
     def __init__(self, weights_path: Optional[str] = None):
         self.config = {
-            "imgsz": 320, "conf_thres": 0.4, "min_conf_for_lime": 0.6,
+            "imgsz": 640, "conf_thres": 0.4, "min_conf_for_lime": 0.6,
             "warning_threshold": 0.75, "roi_shrink": 192, "topk": 1,
             "lime_samples": 100, "lime_alpha": 0.65
         }
@@ -304,38 +311,33 @@ class CollisionDetectorLIME:
         cfg = self.get_config()
         results = self.yolo.predict(source=frame_bgr, imgsz=cfg["imgsz"], verbose=False)
 
-        # 박스 추출
-        processed_frame = frame_bgr.copy()
-        processed_frame, boxes = draw_boxes(
-            processed_frame, results, conf_thres=cfg["conf_thres"], names=self.names
-        )
+        # YOLO 박스 추출
+        _, boxes = draw_boxes(frame_bgr.copy(), results, conf_thres=cfg["conf_thres"], names=self.names)
 
-        # 거리 계산 (가장 가까운 객체 선택)
+        # 거리 기준 top 1 선택
         closest_box = None
         min_distance = float("inf")
         for box in boxes:
+            if len(box) < 6:
+                continue
             x1, y1, x2, y2, cls, conf = box
-            distance = estimate_distance(box, cls)  # 클래스별 높이 기반 거리
+            distance = estimate_distance(box, cls)
             if distance < min_distance:
                 min_distance = distance
                 closest_box = box
 
-        # 최신 작업 저장 (LIME 백그라운드 처리용)
+        processed_frame = frame_bgr.copy()
+
+        # top 1 객체만 프레임에 표시
         if closest_box is not None:
+            processed_frame, _ = draw_boxes(processed_frame, [closest_box], conf_thres=cfg["conf_thres"], names=self.names)
             with self.data_lock:
                 self.latest_job["frame"] = frame_bgr.copy()
                 self.latest_job["boxes"] = [closest_box]
 
-        # LIME 마스크 적용
-        m_pos, m_neg = None, None
-        with self.data_lock:
-            if self.last_mask_pos is not None and self.last_mask_neg is not None:
-                if self.last_mask_pos.shape[:2] == processed_frame.shape[:2]:
-                    m_pos = self.last_mask_pos.copy()
-                    m_neg = self.last_mask_neg.copy()
-
-        if m_pos is not None and m_neg is not None:
-            processed_frame = blend_dual_mask_sequential(processed_frame, m_pos, m_neg, alpha=cfg["lime_alpha"])
+        # LIME 위험 영역 적용
+        if self.last_mask_pos is not None:
+            processed_frame = blend_dual_mask_sequential(processed_frame, self.last_mask_pos, alpha=cfg["lime_alpha"])
 
         max_conf = closest_box[5] if closest_box else 0.0
 
