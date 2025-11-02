@@ -6,6 +6,26 @@ from ultralytics import YOLO
 from lime import lime_image
 from skimage.segmentation import slic
 
+# 클래스별 실제 높이 (m 단위)
+CLASS_HEIGHTS = {
+    0: 1.5,   # car 평균 높이
+    1: 5.0,   # tree 평균 높이
+    2: 10.0,  # building 평균 높이
+    3: 1.7,   # person 평균 키
+    4: 0.5    # other, 임의값
+}
+
+# 단일 카메라 초점거리 (픽셀 단위, f_x)
+FOCAL_LENGTH_PIXELS = 1400  # 카메라 스펙에 맞게 수정
+
+# 픽셀 높이 → 실제 거리 계산 함수
+def estimate_distance(box, class_id):
+    y1, y2 = box[1], box[3]
+    h_pixels = max(y2 - y1, 1)
+    H_actual = CLASS_HEIGHTS.get(class_id, 1.7)
+    Z = (H_actual * FOCAL_LENGTH_PIXELS) / h_pixels
+    return Z
+
 # 상단에 위험도 바 시각화
 def draw_risk_indicator(frame, max_conf, warning_threshold):
     h, w = frame.shape[:2]
@@ -36,7 +56,7 @@ def draw_risk_indicator(frame, max_conf, warning_threshold):
 def draw_boxes(frame, results, conf_thres=0.35, names=None):
     if not results or getattr(results[0], "boxes", None) is None:
         return frame, []
-    
+
     sorted_boxes = sorted(results[0].boxes, key=lambda b: float(b.conf[0]) if b.conf is not None else 0.0, reverse=True)
     boxes_info = []
 
@@ -55,7 +75,7 @@ def draw_boxes(frame, results, conf_thres=0.35, names=None):
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
         (w_text, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
         text_y = max(y1, h + 30)
-        
+
         # 바운딩 박스 텍스트는 서버 렌더링으로 유지 (가독성 향상 위해 배경 제거)
         cv2.putText(frame, label, (x1, text_y-6),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA)
@@ -66,7 +86,7 @@ def draw_boxes(frame, results, conf_thres=0.35, names=None):
 def _blend_single(bg: np.ndarray, fg_color_bgr: Tuple[int, int, int], mask: np.ndarray, alpha: float) -> np.ndarray:
     if mask is None or np.max(mask) == 0: 
         return bg
-    
+
     m = cv2.GaussianBlur(mask, (0, 0), 2.5); m3 = cv2.merge([m, m, m])
     fg = np.zeros_like(bg); fg[:] = fg_color_bgr
     out = (bg.astype(np.float32) * (1.0 - alpha*m3) + fg.astype(np.float32) * (alpha*m3))
@@ -131,7 +151,7 @@ def lime_mask_on_roi_weighted(roi_bgr: np.ndarray, model: YOLO, class_id: int,
 
         if not sorted_exp: 
             return pos_mask, neg_mask
-        
+
         for segment_id, weight in sorted_exp:
             mask_area = (segments == segment_id)
 
@@ -146,7 +166,7 @@ def lime_mask_on_roi_weighted(roi_bgr: np.ndarray, model: YOLO, class_id: int,
             pos_mask = np.clip(pos_mask / max_weight, 0.0, 1.0)
             neg_mask = np.clip(neg_mask / max_weight, 0.0, 1.0)
         return pos_mask, neg_mask
-    
+
     except Exception as e:
         return np.zeros((h, w), dtype=np.float32), np.zeros((h, w), dtype=np.float32)
 
@@ -233,7 +253,7 @@ class CollisionDetectorLIME:
     # 위험도 평가 & 알림
     def _evaluate_risk(self, max_conf: float) -> Dict[str, Any]:
         alert_event = None
-        
+
         if max_conf >= 0.80:
             level, text = "danger", "위험"
             sound, tts = "alert_high_repeat", "충돌 위험"
@@ -269,12 +289,14 @@ class CollisionDetectorLIME:
             "text": text,
             "alert_event": alert_event
         }
+    
+    
 
     # 메인 처리 함수 - yolo, lime, bbox & 픽셀 시각화, 위험 데이터 반환
     def process_frame(self, frame_bgr: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
         if frame_bgr is None:
             return frame_bgr, self._evaluate_risk(0.0)
-        
+
         cfg = self.get_config()
         results = self.yolo.predict(source=frame_bgr, imgsz=cfg["imgsz"], verbose=False)
 
@@ -284,11 +306,20 @@ class CollisionDetectorLIME:
             processed_frame, results, conf_thres=cfg["conf_thres"], names=self.names
         )
 
+        # 각 객체 거리 계산 & 텍스트 표시
+        for box in boxes:
+            x1, y1, x2, y2, cls, conf = box
+            distance = estimate_distance([x1, y1, x2, y2], cls)
+            cv2.putText(processed_frame, f"D={distance:.1f}m", (x1, y2+15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 1, cv2.LINE_AA)
+
+        # 최신 작업 저장 (LIME 백그라운드 처리용)
         if boxes:
             with self.data_lock:
                 self.latest_job["frame"] = frame_bgr.copy()
                 self.latest_job["boxes"] = boxes
 
+        # LIME 마스크 적용
         m_pos, m_neg = None, None
         with self.data_lock:
             if self.last_mask_pos is not None and self.last_mask_neg is not None:
@@ -308,11 +339,12 @@ class CollisionDetectorLIME:
         return processed_frame, risk_data
 
 
+
     # FPS 계산
     def _calculate_fps(self):
         self.cnt += 1
         now = time.time()
-        
+
         if now - self.t0 >= 0.5:
             self.fps = self.cnt / (now - self.t0)
             self.t0, self.cnt = now, 0
