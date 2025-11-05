@@ -1,4 +1,4 @@
-path: C:/Users/lab/softwareteam/dataset/
+path: C:/Users/lab/softwareteam/Drone Crash Avoidance.v7-v7.yolov11
 
 test: test/images
 train: train/images
@@ -14,7 +14,8 @@ names:
   4: other
 
 roboflow:
-  url: https://universe.roboflow.com/tylervisimoai/drone-crash-avoidance/
-
-ultraylytics:
-  url: https://docs.ultralytics.com/ko/datasets/detect/visdrone/
+  workspace: tylervisimoai
+  project: drone-crash-avoidance
+  version: 7
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/tylervisimoai/drone-crash-avoidance/dataset/7
