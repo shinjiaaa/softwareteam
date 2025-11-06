@@ -1,6 +1,5 @@
 .env
 
-.venv/
 __pycache__/
 *.pyc
 *.pth
@@ -17,6 +16,9 @@ runs/detect/
 dataset/
 datasets/
 wandb/
+
+collision_dataset/
+Drone Crash Avoidance.v7-v7.yolov11/
 
 *.zip
 *.rar

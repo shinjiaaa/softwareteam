@@ -308,10 +308,18 @@ class CollisionDetectorLIME:
 
         # 각 객체 거리 계산 & 텍스트 표시
         for box in boxes:
+            if len(box) < 6: 
+                continue
             x1, y1, x2, y2, cls, conf = box
-            distance = estimate_distance([x1, y1, x2, y2], cls)
-            cv2.putText(processed_frame, f"D={distance:.1f}m", (x1, y2+15),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 1, cv2.LINE_AA)
+            distance = estimate_distance(box, cls)  # 거리 계산만 내부용
+            if distance < min_distance:
+                min_distance = distance
+                closest_box = box
+
+        processed_frame = frame_bgr.copy()
+
+        if closest_box is not None:
+            processed_frame, _ = draw_boxes(processed_frame, [closest_box], conf_thres=cfg["conf_thres"], names=self.names)
 
         # 최신 작업 저장 (LIME 백그라운드 처리용)
         if boxes:
