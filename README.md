@@ -13,7 +13,7 @@
 
 ## Directory
 1. model 경로
-- 객체 탐지 모델: runs/detect/VisDrone_train4/weights/best.pt
+- 객체 탐지 모델: YOLO-Continued\train9_finetune\weights\best.pt
 - 충돌 분류 모델: collision_dataset\model\test_2\model_weights.h5
 2. static/: UI
 3. app.py: 엔드포인트 정의 및 UI 실행 함수
