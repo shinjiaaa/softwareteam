@@ -1,8 +1,8 @@
-path: C:/Users/lab/softwareteam/Drone Crash Avoidance.v7-v7.yolov11
+path: C:/Users/lab/softwareteam/datasets/VisDrone
 
-test: test/images
-train: train/images
-val: valid/images
+test: images/test
+train: images/train
+val: images/val
 
 nc: 5
 

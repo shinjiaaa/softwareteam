@@ -15,10 +15,9 @@ WANDB_API_KEY = os.getenv("WANDB_API_KEY")
 os.environ["WANDB_API_KEY"] = WANDB_API_KEY
 weave.init("tlswldk122104-gnu/intro-example")
 
-# 모델 평가 함수
-# 충돌 분류 모델 / 객체 탐지 모델 경로 넣어서 돌리면 돼요! 충돌 분류 모델은 .yaml 파일 없음!
+# 객체 탐지 모델 평가
 def evaluate_yolo():
-    model_path = ""
+    model_path = "YOLO-Continued/train9_finetune/weights/best.pt"
     data_yaml = "data.yaml"
 
     print(f"\n📊 평가 시작: {model_path}")
