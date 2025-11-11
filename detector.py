@@ -146,7 +146,7 @@ def lime_mask_on_roi_weighted(
     class_id: int,
     num_samples: int,
     n_segments=70,
-    num_features=10,
+    num_features=2,
     compactness=10.0,
 ) -> Tuple[np.ndarray, np.ndarray]:
     roi_rgb = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2RGB)
@@ -204,7 +204,7 @@ class CollisionDetectorLIME:
             "conf_thres": 0.35,
             "min_conf_for_lime": 0.5,  # 위험률 50% 이상일 때만 픽셀 반환
             "warning_threshold": 0.75,
-            "roi_shrink": 192,
+            "roi_shrink": 96,
             "topk": 1,
             "lime_samples": 100,
             "lime_alpha": 0.65,
@@ -246,6 +246,8 @@ class CollisionDetectorLIME:
         # LIME 결과 저장
         self.last_mask_pos: Optional[np.ndarray] = None
         self.last_mask_neg: Optional[np.ndarray] = None
+        self.last_lime_json_time: float = 0.0  # 마지막 LIME JSON 생성 시각
+        self.frame_count: int = 0  # _worker_loop에서 N프레임마다 계산용
 
         # 동기화/스레드
         self.data_lock = Lock()
@@ -278,6 +280,7 @@ class CollisionDetectorLIME:
 
     # 백그라운드 LIME 계산 (위험도 기준으로 실행)
     def _worker_loop(self):
+        frame_count = 0  # 프레임 카운터 추가
         while not self.cancel_event.is_set():
             job_frame, job_boxes = None, None
             with self.data_lock:
@@ -290,10 +293,15 @@ class CollisionDetectorLIME:
                 time.sleep(0.01)
                 continue
 
+            frame_count += 1
+            N = 5  # N 프레임마다 1번만 LIME 계산
+            if frame_count % N != 0:
+                time.sleep(0.01)
+                continue
+
             cfg = self.get_config()
             H, W = job_frame.shape[:2]
 
-            # job_boxes는 process_frame에서 위험도 조건 만족 시 전달됨
             sel = job_boxes[: cfg["topk"]]
             if not sel:
                 time.sleep(0.02)
@@ -316,7 +324,6 @@ class CollisionDetectorLIME:
                 except cv2.error:
                     continue
 
-                # 상위 3개 슈퍼픽셀만 반환
                 m_small_pos, m_small_neg = lime_mask_on_roi_weighted(
                     roi_small,
                     self.yolo,
@@ -474,7 +481,13 @@ class CollisionDetectorLIME:
         self._calculate_fps()
 
         # LIME 결과를 LLM으로 설명 생성
-        if risk_data["alert_event"] and self.last_mask_pos is not None:
+        now = time.time()
+        JSON_COOLDOWN = 5.0  # 최소 5초마다 1번만 생성
+        if (
+            risk_data["alert_event"]
+            and self.last_mask_pos is not None
+            and now - self.last_lime_json_time >= JSON_COOLDOWN
+        ):
             try:
                 class_name = (
                     self.names[closest_box[4]]
@@ -493,6 +506,7 @@ class CollisionDetectorLIME:
                     "[LIME-EXPLANATION]",
                     json.dumps(explanation_json, ensure_ascii=False),
                 )
+                self.last_lime_json_time = now  # 생성 시각 업데이트
             except Exception as e:
                 print(f"[LIME-EXPLANATION ERROR] {e}")
 
