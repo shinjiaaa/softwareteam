@@ -1,4 +1,4 @@
-path: C:/Users/lab/softwareteam/datasets/VisDrone
+path: C:/Users/lab/softwareteam/datasets/
 
 test: images/test
 train: images/train
@@ -11,10 +11,3 @@ names:
   1: tree
   2: person
   3: other
-
-roboflow:
-  workspace: tylervisimoai
-  project: drone-crash-avoidance
-  version: 7
-  license: CC BY 4.0
-  url: https://universe.roboflow.com/tylervisimoai/drone-crash-avoidance/dataset/7

@@ -8,6 +8,7 @@ from ultralytics import YOLO
 from lime import lime_image
 from skimage.segmentation import slic
 from tensorflow.keras.models import load_model
+from explainer import generate_lime_explanation
 
 # 카메라 캘리브레이션 설정
 CLASS_HEIGHTS = {0: 1.5, 1: 5.0, 2: 10.0, 3: 1.7, 4: 0.5}
@@ -473,6 +474,25 @@ class CollisionDetectorLIME:
         risk_data = self._evaluate_risk(max_conf)
         draw_risk_indicator(processed_frame, max_conf, cfg["warning_threshold"])
         self._calculate_fps()
+
+        # LIME 결과를 LLM으로 설명 생성
+        if risk_data["alert_event"] and self.last_mask_pos is not None:
+            try:
+                class_name = (
+                    self.names[closest_box[4]]
+                    if closest_box and self.names and 0 <= closest_box[4] < len(self.names)
+                    else "unknown"
+                )
+                explanation_json = generate_lime_explanation(
+                    self.last_mask_pos,
+                    self.last_mask_neg,
+                    class_name,
+                    max_conf,
+                )
+                print("[LIME-EXPLANATION]", json.dumps(explanation_json, ensure_ascii=False))
+            except Exception as e:
+                print(f"[LIME-EXPLANATION ERROR] {e}")
+                
         return processed_frame, risk_data
 
     def _calculate_fps(self):
