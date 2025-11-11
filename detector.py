@@ -1,6 +1,4 @@
-import os
-import time
-import cv2
+import os, time, cv2, json
 import numpy as np
 from typing import Optional, Tuple, Dict, Any
 from threading import Thread, Lock, Event
@@ -480,7 +478,9 @@ class CollisionDetectorLIME:
             try:
                 class_name = (
                     self.names[closest_box[4]]
-                    if closest_box and self.names and 0 <= closest_box[4] < len(self.names)
+                    if closest_box
+                    and self.names
+                    and 0 <= closest_box[4] < len(self.names)
                     else "unknown"
                 )
                 explanation_json = generate_lime_explanation(
@@ -489,10 +489,13 @@ class CollisionDetectorLIME:
                     class_name,
                     max_conf,
                 )
-                print("[LIME-EXPLANATION]", json.dumps(explanation_json, ensure_ascii=False))
+                print(
+                    "[LIME-EXPLANATION]",
+                    json.dumps(explanation_json, ensure_ascii=False),
+                )
             except Exception as e:
                 print(f"[LIME-EXPLANATION ERROR] {e}")
-                
+
         return processed_frame, risk_data
 
     def _calculate_fps(self):
