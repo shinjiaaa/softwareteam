@@ -1,7 +1,4 @@
-# detector.py
-import os
-import time
-import cv2
+import os, time, cv2, json
 import numpy as np
 from typing import Optional, Tuple, Dict, Any
 from threading import Thread, Lock, Event
@@ -9,21 +6,18 @@ from ultralytics import YOLO
 from lime import lime_image
 from skimage.segmentation import slic
 from tensorflow.keras.models import load_model
+from explainer import generate_lime_explanation
 
-# -----------------------
-# 설정
-# -----------------------
+# 카메라 캘리브레이션 설정
 CLASS_HEIGHTS = {0: 1.5, 1: 5.0, 2: 10.0, 3: 1.7, 4: 0.5}
 FOCAL_LENGTH_PIXELS = 1400
 
-# 기본 경로
-DEFAULT_YOLO = "YOLO-Continued/train9_finetune/weights/best.pt"
-DEFAULT_COLLISION = "collision_dataset/model/test_2/model_weights.h5"
+# 모델 경로
+DEFAULT_YOLO = "YOLO-Continued/train9_finetune/weights/best.pt"  # 객체 탐지 모델
+DEFAULT_COLLISION = "collision_dataset/model/test_2/model_weights.h5"  # 충돌 분류 모델
 
 
-# -----------------------
 # 유틸 함수들
-# -----------------------
 def estimate_distance(box, class_id):
     # box: (x1,y1,x2,y2,cls,conf) 또는 이 형식에서 사용
     y1, y2 = box[1], box[3]
@@ -91,9 +85,7 @@ def draw_boxes(frame, results, conf_thres=0.35, names=None):
     return frame, boxes_info
 
 
-# -----------------------
-# 마스크 블렌드 (빨간색만)
-# -----------------------
+# 마스크 블렌드 - 빨간색(=위험)만
 def _blend_single(
     bg: np.ndarray, fg_color_bgr: Tuple[int, int, int], mask: np.ndarray, alpha: float
 ) -> np.ndarray:
@@ -122,9 +114,7 @@ def blend_dual_mask_sequential(
     return _blend_single(frame_bgr, COLOR_RED, pos_mask01, alpha)
 
 
-# -----------------------
-# LIME: YOLO 기반 예측 wrapper (ROI에 대해 신뢰도 반환)
-# -----------------------
+# LIME - YOLO 기반 예측 wrapper (ROI에 대해 신뢰도 반환)
 def make_predict_fn_for_roi(model: YOLO, class_id: int):
     def predict_proba(batch_rgb: np.ndarray) -> np.ndarray:
         bgr_batch = [cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR) for rgb in batch_rgb]
@@ -149,9 +139,7 @@ def make_predict_fn_for_roi(model: YOLO, class_id: int):
     return predict_proba
 
 
-# -----------------------
 # LIME 마스크 생성 (상위 3개 슈퍼픽셀만 반환)
-# -----------------------
 def lime_mask_on_roi_weighted(
     roi_bgr: np.ndarray,
     model: YOLO,
@@ -204,9 +192,7 @@ def lime_mask_on_roi_weighted(
         return np.zeros((h, w), dtype=np.float32), np.zeros((h, w), dtype=np.float32)
 
 
-# -----------------------
 # CollisionDetectorLIME 클래스 (YOLO -> Collision classifier -> LIME 흐름)
-# -----------------------
 class CollisionDetectorLIME:
     def __init__(
         self,
@@ -216,7 +202,7 @@ class CollisionDetectorLIME:
         self.config = {
             "imgsz": 320,
             "conf_thres": 0.35,
-            "min_conf_for_lime": 0.5,  # LIME 실행 최소 임계값 (0.5)
+            "min_conf_for_lime": 0.5,  # 위험률 50% 이상일 때만 픽셀 반환
             "warning_threshold": 0.75,
             "roi_shrink": 192,
             "topk": 1,
@@ -257,7 +243,7 @@ class CollisionDetectorLIME:
                 print(f"[Detector] Failed to load default collision model: {e}")
                 self.collision_model = None
 
-        # LIME 결과 저장소
+        # LIME 결과 저장
         self.last_mask_pos: Optional[np.ndarray] = None
         self.last_mask_neg: Optional[np.ndarray] = None
 
@@ -290,9 +276,7 @@ class CollisionDetectorLIME:
         if self.worker_thread:
             self.worker_thread.join(timeout=3.0)
 
-    # -----------------------
     # 백그라운드 LIME 계산 (위험도 기준으로 실행)
-    # -----------------------
     def _worker_loop(self):
         while not self.cancel_event.is_set():
             job_frame, job_boxes = None, None
@@ -354,9 +338,7 @@ class CollisionDetectorLIME:
                 self.last_mask_pos = mask_full_pos
                 self.last_mask_neg = np.zeros_like(mask_full_pos)
 
-    # -----------------------
     # 위험도 평가
-    # -----------------------
     def _evaluate_risk(self, max_conf: float) -> Dict[str, Any]:
         alert_event = None
         if max_conf >= 0.80:
@@ -392,9 +374,7 @@ class CollisionDetectorLIME:
             "alert_event": alert_event,
         }
 
-    # -----------------------
-    # 메인 처리: YOLO -> Collision classifier -> (조건부)LIME -> 시각화
-    # -----------------------
+    # 메인 처리: YOLO -> Collision classifier -> (조건부) LIME -> 시각화
     def process_frame(self, frame_bgr: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
         if frame_bgr is None:
             return frame_bgr, self._evaluate_risk(0.0)
@@ -421,38 +401,37 @@ class CollisionDetectorLIME:
 
         # 충돌 분류 모델로 ROI 예측 (가장 가까운 객체만)
         collision_prob = 0.0
+
         if closest_box is not None and self.collision_model is not None:
             x1, y1, x2, y2, cls, conf = closest_box
             x1, y1, x2, y2 = max(0, x1), max(0, y1), max(0, x2), max(0, y2)
             roi = frame_bgr[y1:y2, x1:x2]
             if roi.size != 0:
                 try:
+                    # 모델 입력 준비
                     roi_resized = cv2.resize(roi, (128, 128))
                     roi_input = (roi_resized.astype(np.float32) / 255.0)[
                         np.newaxis, ...
                     ]
+
+                    # 충돌 확률 예측
                     pred = self.collision_model.predict(roi_input, verbose=0)[0]
-                    # 모델 출력 형식 다양성 대비
                     if hasattr(pred, "__len__") and len(pred) >= 2:
                         collision_prob = float(pred[1])
                     else:
                         collision_prob = float(pred[0])
+
+                    # 거리 기반 위험도 보정
+                    if distance > 0:
+                        distance_factor = np.exp(
+                            -distance / 10.0
+                        )  # 거리 10m 기준으로 감쇠
+                        collision_prob *= 0.5 + 0.5 * distance_factor
+                        collision_prob = np.clip(collision_prob, 0.0, 1.0)
+
                 except Exception as e:
                     print(f"[Detector WARN] collision model predict error: {e}")
                     collision_prob = 0.0
-
-                # 박스에 충돌 확률 표기
-                label = f"COLL {collision_prob:.2f}"
-                color = (0, 0, 255) if collision_prob >= 0.5 else (0, 255, 0)
-                cv2.putText(
-                    processed_frame,
-                    label,
-                    (x1, max(10, y1) - 6),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    color,
-                    2,
-                )
 
         # 위험도(max_conf)는 collision_prob 우선 사용, 없으면 YOLO 최고 conf 사용
         max_conf = (
@@ -461,22 +440,22 @@ class CollisionDetectorLIME:
             else (boxes[0][5] if boxes else 0.0)
         )
 
-        # LIME 백그라운드 작업에 전달: 오직 위험(>= min_conf_for_lime)일 때만
+        # LIME 백그라운드 작업에 전달 - 위험 상태(>= min_conf_for_lime)일 때만
         if boxes and max_conf >= cfg["min_conf_for_lime"]:
             with self.data_lock:
-                # topk 박스 전달(여기선 가장 높은 conf부터 topk)
+                # topk 박스 전달 - 가장 높은 conf부터 topk
                 self.latest_job["frame"] = frame_bgr.copy()
                 # 전달할 boxes는 list of tuples
                 self.latest_job["boxes"] = boxes
         else:
-            # 안전하면 이전 LIME 결과 삭제
+            # 안전 상태일 시 LIME 결과 삭제
             with self.data_lock:
                 self.last_mask_pos = None
                 self.last_mask_neg = None
                 self.latest_job["frame"] = None
                 self.latest_job["boxes"] = None
 
-        # LIME 마스크 적용 (단, 안전이면 적용 안 함)
+        # LIME 마스크 적용
         m_pos = None
         with self.data_lock:
             if (
@@ -493,6 +472,30 @@ class CollisionDetectorLIME:
         risk_data = self._evaluate_risk(max_conf)
         draw_risk_indicator(processed_frame, max_conf, cfg["warning_threshold"])
         self._calculate_fps()
+
+        # LIME 결과를 LLM으로 설명 생성
+        if risk_data["alert_event"] and self.last_mask_pos is not None:
+            try:
+                class_name = (
+                    self.names[closest_box[4]]
+                    if closest_box
+                    and self.names
+                    and 0 <= closest_box[4] < len(self.names)
+                    else "unknown"
+                )
+                explanation_json = generate_lime_explanation(
+                    self.last_mask_pos,
+                    self.last_mask_neg,
+                    class_name,
+                    max_conf,
+                )
+                print(
+                    "[LIME-EXPLANATION]",
+                    json.dumps(explanation_json, ensure_ascii=False),
+                )
+            except Exception as e:
+                print(f"[LIME-EXPLANATION ERROR] {e}")
+
         return processed_frame, risk_data
 
     def _calculate_fps(self):
