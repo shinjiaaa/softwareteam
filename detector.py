@@ -13,7 +13,7 @@ CLASS_HEIGHTS = {0: 1.5, 1: 5.0, 2: 10.0, 3: 1.7, 4: 0.5}
 FOCAL_LENGTH_PIXELS = 1400
 
 # 모델 경로
-DEFAULT_YOLO = "YOLO-Continued/train9_finetune/weights/best.pt"  # 객체 탐지 모델
+DEFAULT_YOLO = "YOLO-Continued/train_balance_finetune_v2/weights/best.pt"  # 객체 탐지 모델
 DEFAULT_COLLISION = "collision_dataset/model/test_2/model_weights.h5"  # 충돌 분류 모델
 
 
@@ -32,7 +32,7 @@ def draw_risk_indicator(frame, max_conf, warning_threshold):
     cv2.rectangle(frame, (0, 0), (w, bar_h), (50, 50, 50), -1)
     risk_w = int(w * max_conf)
     if max_conf < 0.5:
-        r, g = int(255 * (max_conf * 2)), 255
+        r, g = int(255 * (max_conf * 2)), 255  
     else:
         r, g = 255, int(255 * (1 - (max_conf - 0.5) * 2))
     color = (0, g, r)

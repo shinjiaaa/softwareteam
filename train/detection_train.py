@@ -35,16 +35,16 @@ def train_and_evaluate():
         torch.cuda.empty_cache()
 
     # ✅ 기존 모델 로드
-    model_path = "YOLO-Continued/train_balance_finetune/weights/best.pt"
+    model_path = "YOLO-Continued\\train_balance_finetune_v2\\weights\\best.pt"
     model = YOLO(model_path)
 
     # ✅ Fine-tuning 학습
     results = model.train(
         data="data.yaml",
-        epochs=200,                 # 더 길게 학습
+        epochs=100,                 # 더 길게 학습
         batch=16,
         imgsz=640,
-        lr0=0.003,                  # 더 낮은 lr로 정밀 조정
+        lr0=0.0005,                  # 더 낮은 lr로 정밀 조정
         lrf=0.01,                   # cosine 최종 lr
         optimizer="AdamW",
         device=device,
@@ -61,11 +61,11 @@ def train_and_evaluate():
         mosaic=0.4, mixup=0.1, copy_paste=0.3,
 
         # ✅ Early stopping
-        patience=30,
+        patience=15,
 
         # ✅ 저장 경로
         project="YOLO-Continued",
-        name="train_balance_finetune_v2",
+        name="train_balance_finetune_v3",
         exist_ok=True,
         verbose=True
     )
@@ -85,7 +85,7 @@ def train_and_evaluate():
     print(f"F1 mean       : {np.mean(f1):.4f}")
 
     # ✅ 결과 저장 폴더
-    save_dir = os.path.join("YOLO-Continued", "train_balance_finetune_v2", "results_summary.txt")
+    save_dir = os.path.join("YOLO-Continued", "train_balance_finetune_v3", "results_summary.txt")
     with open(save_dir, "w") as f:
         f.write("=== YOLOv8 Fine-tune Evaluation ===\n")
         f.write(f"mAP@0.5      : {metrics.box.map50:.4f}\n")
