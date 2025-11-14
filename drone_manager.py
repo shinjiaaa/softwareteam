@@ -254,7 +254,7 @@ try:
     initial_detector = CollisionDetectorLIME(weights_path=None)
     # 중요: 실제 드론 사용 시 use_webcam=False로 설정
     # 테스트를 위해 웹캠을 사용하려면 True로 변경하세요.
-    drone_manager = DroneManager(detector=initial_detector, use_webcam=False)
+    drone_manager = DroneManager(detector=initial_detector, use_webcam=True)
 except Exception as e:
     print(f"[System Init Error] Failed to initialize Detector or Manager: {e}")
     exit(1)
