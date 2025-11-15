@@ -1,6 +1,0 @@
-=== YOLOv8 Fine-tune Evaluation ===
-mAP@0.5      : 0.4770
-mAP@0.5:0.95 : 0.2530
-Precision mean: 0.6062
-Recall mean   : 0.4631
-F1 mean       : 0.5150
