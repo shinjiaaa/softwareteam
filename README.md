@@ -13,12 +13,14 @@
 
 ## Directory
 1. model 경로
-- 객체 탐지 모델: YOLO-Continued\train9_finetune\weights\best.pt
+- 객체 탐지 모델: YOLO-Continued\train_balance_finetune_v3\weights\best.pt & data.yaml
 - 충돌 분류 모델: collision_dataset\model\test_2\model_weights.h5
 2. static/: UI
-3. app.py: 엔드포인트 정의 및 UI 실행 함수
-4. detector.py: 실시간 영상 사용하여 yolo, lime 적용
+3. app.py: 엔드포인트 정의 및 UI 실행
+4. detector.py: 실시간 영상 프레임 사용하여 모델에 lime 적용
 5. drone_manager.py: 드론 제어
+6. eval: 각 모델 평가
+7. train: 각 모델 train
 
 ## 데이터셋 출처
 1. https://universe.roboflow.com/tylervisimoai/drone-crash-avoidance
