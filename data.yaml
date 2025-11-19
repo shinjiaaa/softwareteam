@@ -1,0 +1,13 @@
+path: C:/Users/lab/softwareteam/datasets/
+
+test: images/test
+train: images/train
+val: images/val
+
+nc: 4
+
+names:
+  0: car
+  1: tree
+  2: person
+  3: other
