@@ -21,7 +21,6 @@ DEFAULT_YOLO = "models/best.pt"
 DEFAULT_COLLISION = "models/model_weights.h5"
 
 
-# CollisionDetectorLIME 클래스 (YOLO -> Collision classifier -> LIME 흐름)
 class CollisionDetectorLIME:
     def __init__(
         self,
@@ -40,7 +39,7 @@ class CollisionDetectorLIME:
         }
         self.config_lock = Lock()
 
-        # YOLO weights 찾기 (인자 > 기본 경로 > 후보)
+        # 모델 가중치 찾기
         if weights_path and os.path.exists(weights_path):
             self.weights = weights_path
         elif os.path.exists(DEFAULT_YOLO):
@@ -51,7 +50,7 @@ class CollisionDetectorLIME:
         self.yolo = YOLO(self.weights)
         self.names = getattr(self.yolo.model, "names", None)
 
-        # 충돌 분류 모델 로드 (optional)
+        # 충돌 분류 모델 로드
         self.collision_model = None
         if collision_model_path and os.path.exists(collision_model_path):
             try:
@@ -72,16 +71,16 @@ class CollisionDetectorLIME:
                 print(f"[Detector] Failed to load default collision model: {e}")
                 self.collision_model = None
 
-        # LIME 결과 저장
+        # LIME 결과
         self.last_mask_pos: Optional[np.ndarray] = None
         self.last_mask_neg: Optional[np.ndarray] = None
-        self.last_lime_json_time: float = 0.0  # 마지막 LIME JSON 생성 시각
-        self.frame_count: int = 0  # _worker_loop에서 N프레임마다 계산용
+        self.last_lime_json_time: float = 0.0
+        self.frame_count: int = 0
 
-        # 동기화/스레드
+        # 스레드
         self.data_lock = Lock()
         self.cancel_event = Event()
-        self.latest_job = {"frame": None, "boxes": None}  # worker가 처리할 최신 작업
+        self.latest_job = {"frame": None, "boxes": None}
         self.worker_thread: Optional[Thread] = None
 
         # FPS, alert
@@ -107,9 +106,9 @@ class CollisionDetectorLIME:
         if self.worker_thread:
             self.worker_thread.join(timeout=3.0)
 
-    # 백그라운드 LIME 계산 (위험도 기준으로 실행)
+    # LIME 연산 (백그라운드에서 진행)
     def _worker_loop(self):
-        frame_count = 0  # 프레임 카운터 추가
+        frame_count = 0
         while not self.cancel_event.is_set():
             job_frame, job_boxes = None, None
             with self.data_lock:
@@ -123,7 +122,7 @@ class CollisionDetectorLIME:
                 continue
 
             frame_count += 1
-            N = 5  # N 프레임마다 1번만 LIME 계산
+            N = 5
             if frame_count % N != 0:
                 time.sleep(0.01)
                 continue
@@ -210,7 +209,7 @@ class CollisionDetectorLIME:
             "alert_event": alert_event,
         }
 
-    # 메인 처리: YOLO -> Collision classifier -> (조건부) LIME -> 시각화
+    # 객체 탐지 모델 -> 충돌 분류 모델 -> LIME
     def process_frame(self, frame_bgr: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
         if frame_bgr is None:
             return frame_bgr, self._evaluate_risk(0.0)
@@ -218,12 +217,12 @@ class CollisionDetectorLIME:
         cfg = self.get_config()
         results = self.yolo.predict(source=frame_bgr, imgsz=cfg["imgsz"], verbose=False)
 
-        # 전체 박스 그리기 (YOLO)
+        # bbox 그리기
         processed_frame, boxes = draw_boxes(
             frame_bgr.copy(), results, cfg["conf_thres"], self.names
         )
 
-        # 가장 가까운 객체 선택 (안전하게 초기화)
+        # 가장 가까운 객체 선택
         min_distance = float("inf")
         closest_box = None
         for box in boxes:
@@ -235,7 +234,7 @@ class CollisionDetectorLIME:
                 min_distance = distance
                 closest_box = box
 
-        # 충돌 분류 모델로 ROI 예측 (가장 가까운 객체만)
+        # 충돌 분류 모델로 ROI 예측
         collision_prob = 0.0
 
         if closest_box is not None and self.collision_model is not None:
@@ -244,7 +243,7 @@ class CollisionDetectorLIME:
             roi = frame_bgr[y1:y2, x1:x2]
             if roi.size != 0:
                 try:
-                    # 모델 입력 준비
+                    # 모델 입력
                     roi_resized = cv2.resize(roi, (128, 128))
                     roi_input = (roi_resized.astype(np.float32) / 255.0)[
                         np.newaxis, ...
@@ -269,19 +268,18 @@ class CollisionDetectorLIME:
                     print(f"[Detector WARN] collision model predict error: {e}")
                     collision_prob = 0.0
 
-        # 위험도(max_conf)는 collision_prob 우선 사용, 없으면 YOLO 최고 conf 사용
+        # 위험도 산출
         max_conf = (
             collision_prob
             if self.collision_model is not None
             else (boxes[0][5] if boxes else 0.0)
         )
 
-        # LIME 백그라운드 작업에 전달 - 위험 상태(>= min_conf_for_lime)일 때만
+        # LIME에 전달 - 위험 상태(>= min_conf_for_lime)일 때만
         if boxes and max_conf >= cfg["min_conf_for_lime"]:
             with self.data_lock:
                 # topk 박스 전달 - 가장 높은 conf부터 topk
                 self.latest_job["frame"] = frame_bgr.copy()
-                # 전달할 boxes는 list of tuples
                 self.latest_job["boxes"] = boxes
         else:
             # 안전 상태일 시 LIME 결과 삭제
@@ -335,7 +333,7 @@ class CollisionDetectorLIME:
                     "[LIME-EXPLANATION]",
                     json.dumps(explanation_json, ensure_ascii=False),
                 )
-                self.last_lime_json_time = now  # 생성 시각 업데이트
+                self.last_lime_json_time = now
             except Exception as e:
                 print(f"[LIME-EXPLANATION ERROR] {e}")
 
