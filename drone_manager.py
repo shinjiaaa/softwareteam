@@ -18,7 +18,7 @@ except ImportError:
 # detector.py 파일에서 CollisionDetectorLIME 임포트
 try:
     # detector.py는 이전과 동일합니다.
-    from detector import CollisionDetectorLIME
+    from detector_utils import CollisionDetectorLIME
 except ImportError as e:
     print(f"[ERROR] detector.py를 찾을 수 없습니다. {e}")
     exit()
