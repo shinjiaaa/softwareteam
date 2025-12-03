@@ -12,7 +12,7 @@ from detector import (
     estimate_distance,
     draw_risk_indicator,
     draw_boxes,
-    blend_dual_mask_sequential,
+    blend_red_mask,
     make_predict_fn_for_roi,
     lime_mask_on_roi_weighted,
 )
@@ -298,8 +298,8 @@ class CollisionDetectorLIME:
             ):
                 m_pos = self.last_mask_pos.copy()
         if m_pos is not None and max_conf >= cfg["min_conf_for_lime"]:
-            processed_frame = blend_dual_mask_sequential(
-                processed_frame, m_pos, None, alpha=cfg["lime_alpha"]
+            processed_frame = blend_red_mask(
+                processed_frame, m_pos, alpha=cfg["lime_alpha"]
             )
 
         # 위험도 평가 & UI 바

@@ -86,32 +86,54 @@ def draw_boxes(frame, results, conf_thres=0.35, names=None):
 
 
 # 마스크 블렌드 - 빨간색(=위험)만
-def _blend_single(
-    bg: np.ndarray, fg_color_bgr: Tuple[int, int, int], mask: np.ndarray, alpha: float
+# def _blend_single(
+#     bg: np.ndarray, fg_color_bgr: Tuple[int, int, int], mask: np.ndarray, alpha: float
+# ) -> np.ndarray:
+#     if mask is None or np.max(mask) == 0:
+#         return bg
+#     m = cv2.GaussianBlur(mask, (0, 0), 2.5)
+#     m3 = cv2.merge([m, m, m])
+#     fg = np.zeros_like(bg)
+#     fg[:] = fg_color_bgr
+#     out = bg.astype(np.float32) * (1.0 - alpha * m3) + fg.astype(np.float32) * (
+#         alpha * m3
+#     )
+#     return np.clip(out, 0, 255).astype(np.uint8)
+
+
+# def blend_dual_mask_sequential(
+#     frame_bgr: np.ndarray,
+#     pos_mask01: np.ndarray,
+#     neg_mask01: np.ndarray,
+#     alpha: float = 0.65,
+# ) -> np.ndarray:
+#     h, w = frame_bgr.shape[:2]
+#     if pos_mask01 is None or pos_mask01.shape != (h, w):
+#         return frame_bgr
+#     COLOR_RED = (0, 0, 255)
+#     return _blend_single(frame_bgr, COLOR_RED, pos_mask01, alpha)
+
+import numpy as np
+import cv2
+from typing import Tuple
+
+
+def blend_red_mask(
+    frame: np.ndarray, mask01: np.ndarray, alpha: float = 0.65
 ) -> np.ndarray:
-    if mask is None or np.max(mask) == 0:
-        return bg
-    m = cv2.GaussianBlur(mask, (0, 0), 2.5)
+    if mask01 is None or np.max(mask01) == 0:
+        return frame
+
+    m = cv2.GaussianBlur(mask01, (0, 0), 2.5)
     m3 = cv2.merge([m, m, m])
-    fg = np.zeros_like(bg)
-    fg[:] = fg_color_bgr
-    out = bg.astype(np.float32) * (1.0 - alpha * m3) + fg.astype(np.float32) * (
+
+    red = np.zeros_like(frame)
+    red[:] = (0, 0, 255)
+
+    blended = frame.astype(np.float32) * (1 - alpha * m3) + red.astype(np.float32) * (
         alpha * m3
     )
-    return np.clip(out, 0, 255).astype(np.uint8)
-
-
-def blend_dual_mask_sequential(
-    frame_bgr: np.ndarray,
-    pos_mask01: np.ndarray,
-    neg_mask01: np.ndarray,
-    alpha: float = 0.65,
-) -> np.ndarray:
-    h, w = frame_bgr.shape[:2]
-    if pos_mask01 is None or pos_mask01.shape != (h, w):
-        return frame_bgr
-    COLOR_RED = (0, 0, 255)
-    return _blend_single(frame_bgr, COLOR_RED, pos_mask01, alpha)
+    return np.clip(blended, 0, 255).astype(np.uint8)
 
 
 # LIME - YOLO 기반 예측 wrapper (ROI에 대해 신뢰도 반환)
