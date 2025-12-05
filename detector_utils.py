@@ -176,13 +176,13 @@ class CollisionDetectorLIME:
     # 위험도 평가
     def _evaluate_risk(self, max_conf: float) -> Dict[str, Any]:
         alert_event = None
-        if max_conf >= 0.80:
+        if max_conf >= 0.85:
             level, text = "danger", "위험"
             sound, tts = "alert_high_repeat", "충돌 위험"
-        elif max_conf >= 0.60:
+        elif max_conf >= 0.75:
             level, text = "warning", "경고"
             sound, tts = "alert_mid_2", "경고"
-        elif max_conf >= 0.50:
+        elif max_conf >= 0.65:
             level, text = "caution", "주의"
             sound, tts = "alert_low_1", "주의"
         else:
