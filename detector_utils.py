@@ -269,11 +269,7 @@ class CollisionDetectorLIME:
                     collision_prob = 0.0
 
         # 위험도 산출
-        max_conf = (
-            collision_prob
-            if self.collision_model is not None
-            else (boxes[0][5] if boxes else 0.0)
-        )
+        max_conf = collision_prob if self.collision_model is not None else 0.0
 
         # LIME에 전달 - 위험 상태(>= min_conf_for_lime)일 때만
         if boxes and max_conf >= cfg["min_conf_for_lime"]:
