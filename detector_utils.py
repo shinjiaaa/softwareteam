@@ -18,7 +18,7 @@ from detector import (
 )
 
 DEFAULT_YOLO = "models/best.pt"
-DEFAULT_COLLISION = "models/model_weights.h5"
+DEFAULT_COLLISION = "model_weights.h5"
 
 
 class CollisionDetectorLIME:
@@ -156,7 +156,7 @@ class CollisionDetectorLIME:
                     roi_small,
                     self.yolo,
                     cls,
-                    num_samples=300,
+                    num_samples=150,
                     num_features=1,
                 )
 
