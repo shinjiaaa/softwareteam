@@ -17,9 +17,7 @@ DEFAULT_YOLO = "YOLO-Continued/train9_finetune/weights/best.pt"  # 객체 탐지
 DEFAULT_COLLISION = "collision_dataset/model/test_2/model_weights.h5"  # 충돌 분류 모델
 
 
-# 유틸 함수들
 def estimate_distance(box, class_id):
-    # box: (x1,y1,x2,y2,cls,conf) 또는 이 형식에서 사용
     y1, y2 = box[1], box[3]
     h_pixels = max(y2 - y1, 1)
     H_actual = CLASS_HEIGHTS.get(class_id, 1.7)
@@ -128,14 +126,14 @@ def make_predict_fn_for_roi(model: YOLO, class_id: int):
     return predict_proba
 
 
-# LIME 마스크 생성 (상위 3개 슈퍼픽셀만 반환)
+# LIME 마스크 생성
 def lime_mask_on_roi_weighted(
     roi_bgr: np.ndarray,
     model: YOLO,
     class_id: int,
     num_samples: int,
-    n_segments=70,
-    num_features=10,
+    n_segments=20,
+    num_features=1,
     compactness=10.0,
 ) -> Tuple[np.ndarray, np.ndarray]:
     roi_rgb = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2RGB)
@@ -160,8 +158,8 @@ def lime_mask_on_roi_weighted(
         label = explanation.top_labels[0]
         segments = explanation.segments
         local_exp = explanation.local_exp[label]
-        # 상위 3개 슈퍼픽셀만 선택 (절댓값 기준)
-        sorted_exp = sorted(local_exp, key=lambda item: abs(item[1]), reverse=True)[:3]
+        # 상위 1개 슈퍼픽셀만 선택
+        sorted_exp = sorted(local_exp, key=lambda item: abs(item[1]), reverse=True)[:1]
         pos_mask = np.zeros((h, w), dtype=np.float32)
         neg_mask = np.zeros((h, w), dtype=np.float32)
         if not sorted_exp:
