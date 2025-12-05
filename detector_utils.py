@@ -156,8 +156,8 @@ class CollisionDetectorLIME:
                     roi_small,
                     self.yolo,
                     cls,
-                    num_samples=cfg["lime_samples"],
-                    num_features=3,
+                    num_samples=300,
+                    num_features=1,
                 )
 
                 m_roi_pos = cv2.resize(
