@@ -30,7 +30,7 @@ class CollisionDetectorLIME:
         self.config = {
             "imgsz": 320,
             "conf_thres": 0.35,
-            "min_conf_for_lime": 0.5,  # 위험률 50% 이상일 때만 픽셀 반환
+            "min_conf_for_lime": 0.65,  # 위험률 50% 이상일 때만 픽셀 반환
             "warning_threshold": 0.75,
             "roi_shrink": 96,
             "topk": 1,

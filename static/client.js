@@ -146,14 +146,14 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
         // 요구사항에 따른 사운드 재생 로직
         switch (soundType) {
-            case 'alert_low_1': // 주의 (Conf >= 0.50): 톤이 낮은 알림음 1회 (A4=440Hz)
+            case 'alert_low_1': // 주의 (Conf >= 0.65): 톤이 낮은 알림음 1회 (A4=440Hz)
                 playBeep(440, 0.2, 0.5);
                 break;
-            case 'alert_mid_2': // 경고 (Conf >= 0.60): 중간 톤의 알림음 2회 (E5=660Hz)
+            case 'alert_mid_2': // 경고 (Conf >= 0.75): 중간 톤의 알림음 2회 (E5=660Hz)
                 playBeep(660, 0.2, 0.5);
                 setTimeout(() => playBeep(660, 0.2, 0.5), 300);
                 break;
-            case 'alert_high_repeat': // 위험 (Conf >= 0.80): 높은 톤의 알림음 반복 (C6=1046.5Hz, 3회 패턴)
+            case 'alert_high_repeat': // 위험 (Conf >= 0.85): 높은 톤의 알림음 반복 (C6=1046.5Hz, 3회 패턴)
                 playBeep(1046.5, 0.15, 0.6);
                 setTimeout(() => playBeep(1046.5, 0.15, 0.6), 200);
                 setTimeout(() => playBeep(1046.5, 0.15, 0.6), 400);

@@ -27,20 +27,35 @@ def estimate_distance(box, class_id):
 def draw_risk_indicator(frame, max_conf, warning_threshold):
     h, w = frame.shape[:2]
     bar_h = 20
+
+    # 배경 바
     cv2.rectangle(frame, (0, 0), (w, bar_h), (50, 50, 50), -1)
+
+    # 위험 바 너비
     risk_w = int(w * max_conf)
-    if max_conf < 0.5:
-        r, g = int(255 * (max_conf * 2)), 255
+
+    # 단계별 색상 설정
+    if max_conf >= 0.85:
+        color = (0, 0, 255)  # 빨강
+    elif max_conf >= 0.75:
+        color = (0, 165, 255)  # 주황
+    elif max_conf >= 0.65:
+        color = (0, 255, 255)  # 노랑
     else:
-        r, g = 255, int(255 * (1 - (max_conf - 0.5) * 2))
-    color = (0, g, r)
+        color = (0, 255, 0)  # 초록
+
+    # 위험 바 그리기
     if risk_w > 0:
         cv2.rectangle(frame, (0, 0), (risk_w, bar_h), color, -1)
+
+    # 경고선
     tx = int(w * warning_threshold)
     if 0 <= tx < w:
         cv2.line(frame, (tx, 0), (tx, bar_h), (255, 255, 255), 2)
+
+    # 텍스트
     text = f"RISK LEVEL: {max_conf*100:.1f}%"
-    tc = (255, 255, 255) if max_conf < 0.6 else (10, 10, 10)
+    tc = (255, 255, 255) if max_conf < 0.75 else (10, 10, 10)
     cv2.putText(
         frame, text, (10, bar_h - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, tc, 1, cv2.LINE_AA
     )
